@@ -79,11 +79,12 @@ if archivo_cargado is not None:
         def obtener_geojson_provincias():
             url = "https://raw.githubusercontent.com/mgaitan/un-mapa-de-argentina-en-r/master/argentina.json"
             try:
-                response = requests.get(url)
-                return response.json()
-            except:
-                return None
-
+                response = requests.get(url, timeout=5)
+                if response.status_code == 200:
+                    return response.json()
+            except Exception:
+                pass
+            return None
         df_base, COORDENADAS = cargar_y_procesar(archivo_cargado)
         geojson_provincias = obtener_geojson_provincias()
 
@@ -383,8 +384,9 @@ if archivo_cargado is not None:
                     showland = True,
                     landcolor = '#000000',      # Superficie terrestre negra
                     showlakes = True,
-                    showsubunits = False,        # DesActiva la división provincial
-                    subunitcolor = '#00FF66',   # Verde brillante/eléctrico de alto contraste
+                    showsubunits = True if not geojson_provincias else False, # Solo mostramos límites si no tenemos el GeoJSON para dibujarlos
+                    #subunitcolor = '#00FF66',   # Verde brillante/eléctrico de alto contraste
+                    subunitcolor = '#1e7e34', # Color de contorno provincial nativo para el Plan B
                     subunitwidth = 3,         # Grosor de la línea del límite interprovincial
                     lonaxis = dict(range=[min_lon, max_lon]), # Rango dinámico calculado
                     lataxis = dict(range=[min_lat, max_lat]), # Rango dinámico calculado
