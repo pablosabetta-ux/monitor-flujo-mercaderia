@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import time
+import requests
 
 # Configuración de la página de Streamlit
 st.set_page_config(layout="wide", page_title="Análisis de Ineficiencias Logísticas")
@@ -72,6 +73,19 @@ if archivo_cargado is not None:
             return df, COORDENADAS_FINAL
 
         df_base, COORDENADAS = cargar_y_procesar(archivo_cargado)
+
+        # ----  Función auxiliar cacheada para obtener el GeoJSON de las provincias argentinas sin saturar la red
+        @st.cache_data
+        def obtener_geojson_provincias():
+            url = "https://raw.githubusercontent.com/mgaitan/un-mapa-de-argentina-en-r/master/argentina.json"
+            try:
+                response = requests.get(url)
+                return response.json()
+            except:
+                return None
+
+        df_base, COORDENADAS = cargar_y_procesar(archivo_cargado)
+        geojson_provincias = obtener_geojson_provincias()
 
         # --------------------- FILTROS ---
         st.sidebar.header("Filtros Operativos")
@@ -282,6 +296,33 @@ if archivo_cargado is not None:
 
             # --- MAPA CON PLOTLY (FONDO NEGRO Y LÍNEAS VERDES) ---
             fig = go.Figure()
+
+            # A. DIBUJAR CONTORNOS PROVINCIALES CON GEOJSON (SI ESTÁ DISPONIBLE)
+            if geojson_provincias:
+                for feature in geojson_provincias['features']:
+                    prov_name = feature['properties'].get('name', 'Provincia')
+                    geometry = feature['geometry']
+                    
+                    # Manejo de Polígonos Simples y MultiPolígonos (islas/secciones separadas)
+                    coords_list = [geometry['coordinates']] if geometry['type'] == 'Polygon' else geometry['coordinates']
+                    
+                    for polygon in coords_list:
+                        # En GeoJSON el formato de cada anillo es [[lon, lat], [lon, lat], ...]
+                        # Si está anidado (MultiPolygon), extraemos el anillo principal
+                        ring = polygon[0] if isinstance(polygon[0][0], list) else polygon
+                        lons = [pt[0] for pt in ring]
+                        lats = [pt[1] for pt in ring]
+                        
+                        fig.add_trace(go.Scattergeo(
+                            lon = lons,
+                            lat = lats,
+                            mode = 'lines',
+                            line = dict(width = 1.2, color = '#28a745'), # Línea verde constante y definida
+                            hoverinfo = 'text',
+                            text = prov_name,
+                            showlegend = False
+                        ))
+
 
             # 1. Dibujar las líneas de flujo (Vínculos geográficos)
             max_kilos = df_mapa['Kilos'].max() if not df_mapa.empty else 1
