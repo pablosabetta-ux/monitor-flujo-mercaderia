@@ -31,6 +31,23 @@ if archivo_cargado is not None:
             df['DEPOSITO'] = df['DEPOSITO'].fillna("DESCONOCIDO").astype(str).str.strip()
             df['TP'] = df['TP'].fillna("SIN_TP").astype(str).str.strip()
 
+            # --- LEER HOJA "CLIENTES" ---
+            clientes_dict = {}
+            try:
+                df_clientes = pd.read_excel(file, sheet_name="CLIENTES")
+                df_clientes.columns = df_clientes.columns.str.strip().str.upper()
+                
+                # Mapeamos usando el documento/nombre como llave
+                for _, row in df_clientes.iterrows():
+                    id_cliente = str(row['NOMBRE']).strip().upper()
+                    clientes_dict[id_cliente] = {
+                        "localidad": str(row['LOCALIDAD']),
+                        "lat": float(row['LAT']),
+                        "lon": float(row['LONG'])
+                    }
+            except Exception as e:
+                st.sidebar.warning(f"No se encontró la hoja 'CLIENTES' o faltan columnas. Detalle: {e}")
+            
             # --- LEER HOJA DE DEPOSITOS DINÁMICA ---
             coordenadas_dict = {}
             try:
@@ -70,9 +87,9 @@ if archivo_cargado is not None:
             # Combinamos lo del Excel con los virtuales (el Excel tiene prioridad si se repite nombre)
             COORDENADAS_FINAL = {**nodos_virtuales, **coordenadas_dict}
 
-            return df, COORDENADAS_FINAL
+            return df, COORDENADAS_FINAL, clientes_dict
 
-        df_base, COORDENADAS = cargar_y_procesar(archivo_cargado)
+        df_base, COORDENADAS, clientes_dict = cargar_y_procesar(archivo_cargado)
 
         # ----  Función auxiliar cacheada para obtener el GeoJSON de las provincias argentinas sin saturar la red
         @st.cache_data
@@ -205,7 +222,23 @@ if archivo_cargado is not None:
             elif tp == 'INI':
                 orig, dest = "Stock Inicial (Virt.)", dep
             elif tp == 'CMV':
-                orig, dest = dep, "Cliente (Venta)"
+                # orig, dest = dep, "Cliente (Venta)"
+                id_cliente = str(row['NOMBRE']).strip().upper()
+    
+                # Si el cliente existe en nuestra base con coordenadas propias:
+                if id_cliente in clientes_dict:
+                    orig = dep
+                    dest = f"CLI_{id_cliente}" # ID único para el destino
+                    # Guardamos la coordenada sobre la marcha en el diccionario global COORDENADAS
+                    COORDENADAS[dest] = {
+                        "lat": clientes_dict[id_cliente]['lat'], 
+                        "lon": clientes_dict[id_cliente]['lon'],
+                        "nombre_real": clientes_dict[id_cliente]['localidad']
+                    }
+                else:
+                    # Respaldo por si ese cliente no está mapeado aún
+                    orig, dest = dep, "CLIENTE (VENTA)"
+
             elif tp == 'Baja_PRODUCC':
                 orig, dest = dep, "Baja/Merma Proceso"
             elif tp == 'PRODUCC':
@@ -235,8 +268,6 @@ if archivo_cargado is not None:
                 # SE SUMA ACÁ: Acumulamos el volumen total que "tocó" cada punto físico o virtual
                 volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
                 volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
-
-
 
         df_flujo = pd.DataFrame(orig_dest)
 
