@@ -382,11 +382,13 @@ if archivo_cargado is not None:
             st.dataframe(
                 df_tabla_ver.sort_values(by='Kilos', ascending=False),
                 hide_index=True,
-                use_container_width=True
+                use_container_width=True,
                 column_config={
                     "Kilos": st.column_config.NumberColumn(
                         "Kilos",
                         format="%d"  # Muestra los separadores de miles estándar del navegador
+                    )
+                }
            )
 
             st.markdown("---")
