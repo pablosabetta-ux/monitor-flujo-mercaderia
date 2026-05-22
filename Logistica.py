@@ -272,15 +272,11 @@ if archivo_cargado is not None:
             tp = row['TP']
             dep = row['DEPOSITO'].upper()
 
-            if tp in ["SIN_TP"] or dep == "DESCONOCIDO":
-                continue                
+            #if tp in ["SIN_TP", "FIN", "INI"] or dep in ["#N/A", "N/A", "NAN"]:
+            if tp in ["SIN_TP", "FIN"] or dep in ["#N/A", "N/A", "NAN"]:
+                continue            
         
             kg = float(row['Cantidad'])
-            lote = row['NroLote']
-            
-            if lote == "SIN_LOTE" or lote == "nan":
-                continue
-
             orig, dest = None, None
             
             if tp in ['FOB']:
@@ -290,7 +286,8 @@ if archivo_cargado is not None:
             elif tp == 'INI':
                 orig, dest = "Stock Inicial (Virt.)", dep
             elif tp == 'CMV':
-                id_cliente = str(row['NOMBRE']).strip().upper()
+                id_cliente = row['NOMBRE']
+                #id_cliente = str(row['NOMBRE']).strip().upper()
                 
                 # Evaluación del botón de comando de apertura
                 if apertura_cliente and (id_cliente in clientes_dict):
