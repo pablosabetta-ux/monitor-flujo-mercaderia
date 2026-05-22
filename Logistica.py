@@ -97,6 +97,26 @@ if archivo_cargado is not None:
             df_filtrado = df_articulo
             st.warning("No se encontraron datos en la columna MES para este artículo.")
 
+        # --- CORRECCIÓN CRÍTICA: EXTRAER Y MOSTRAR STOCK INICIAL ESTÁTICO ---
+        st.subheader("📋 Foto de Inventario Inicial (No es movimiento)")
+        
+        # Filtramos los registros que sean INI en todo el historial cargado para este artículo
+        df_ini = df_articulo[df_articulo['TP'] == 'INI']
+        
+        if not df_ini.empty:
+            # Agrupamos por depósito para saber cuánto había en cada lugar al inicio de todo
+            stock_inicial_por_dep = df_ini.groupby('DEPOSITO')['Cantidad'].sum()
+            
+            # Dibujamos tarjetas métricas lindas en columnas horizontales
+            cols_metricas = st.columns(len(stock_inicial_por_dep))
+            for idx, (deposito_nombre, kilos_iniciales) in enumerate(stock_inicial_por_dep.items()):
+                with cols_metricas[idx]:
+                    st.metric(label=f"STK Inicial en {deposito_nombre}", value=f"{kilos_iniciales:,.0f} Kg")
+        else:
+            st.info("No se registraron registros de Stock Inicial (INI) para este producto.")
+
+        st.markdown("---")
+
         # --- LÓGICA DE DERIVACIÓN DE ORIGEN Y DESTINO ---
         orig_dest = []
         for idx, row in df_filtrado.iterrows():
@@ -104,10 +124,10 @@ if archivo_cargado is not None:
             tp = str(row['TP']).strip()
             dep = str(row['DEPOSITO']).strip()
 
-            # Nos saltamos registros inválidos generados por celdas vacías en el Excel
-            if tp == "SIN_TP" or dep == "DESCONOCIDO":
-                continue
-                
+            # MODIFICACIÓN: Agregamos 'INI' a la lista de exclusión. Ya NO genera flechas de flujo.
+            if tp in ["SIN_TP", "FIN", "INI"] or dep == "DESCONOCIDO":
+                continue                
+            
             # Forzamos que los kilos sean flotantes
             kg = float(row['Cantidad'])
             lote = row['NroLote']
