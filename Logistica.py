@@ -320,7 +320,7 @@ if archivo_cargado is not None:
 
             # 2. Configurar la estética del Layout (Límites de provincias en VERDE, Fondo NEGRO)
             if lats_activas and lons_activas:
-                margen = 3.5 # Grados de holgura alrededor del flujo
+                margen = 10 # Grados de holgura alrededor del flujo
                 min_lat, max_lat = min(lats_activas) - margen, max(lats_activas) + margen
                 min_lon, max_lon = min(lons_activas) - margen, max(lons_activas) + margen
             else:
@@ -344,7 +344,7 @@ if archivo_cargado is not None:
                     showlakes = True,
                     showsubunits = True,        # Activa la división provincial
                     subunitcolor = '#00FF66',   # Verde brillante/eléctrico de alto contraste
-                    subunitwidth = 1.5,         # Grosor de la línea del límite interprovincial
+                    subunitwidth = 3,         # Grosor de la línea del límite interprovincial
                     lonaxis = dict(range=[min_lon, max_lon]), # Rango dinámico calculado
                     lataxis = dict(range=[min_lat, max_lat]), # Rango dinámico calculado
                     bgcolor = '#000000'         # Fondo general del recuadro negro
