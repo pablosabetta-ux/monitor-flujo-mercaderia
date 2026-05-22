@@ -124,7 +124,8 @@ if archivo_cargado is not None:
         articulos = sorted(df_f['NomArticulo'].dropna().astype(str).unique())
         articulo_sel = st.sidebar.selectbox("2. Selecciona el Producto:", articulos)
         df_filtrado = df_f[df_f['NomArticulo'] == articulo_sel].copy()
-        df_articulo = df_f[df_f['NomArticulo'] == articulo_sel].copy()
+        df_filtrado['Kilos'] = df_filtrado['Cantidad'].abs()
+        df_articulo = df_filtrado.copy()
 
         # COMANDO: Control de apertura geográfica solicitado
         st.sidebar.markdown("---")
@@ -249,7 +250,14 @@ if archivo_cargado is not None:
             # Si es FIN o no aplica, lo salteamos del flujo direccional
             if orig and dest:
 
-                orig_dest_sankey.append({'Fecha': row['Fecha'], 'Lote': row['NroLote'], 'Origen': orig, 'Destino': dest, 'Kilos': abs(kg)})
+                orig_dest_sankey.append({
+                    'Fecha': row['Fecha'],
+                    'Lote': row['NroLote'],
+                    'Origen': orig,
+                    'Destino': dest,
+                    'Kilos': abs(kg),
+                    'Tipo_Movimiento': tp
+                })
                 
         df_flujo_sankey = pd.DataFrame(orig_dest_sankey)
 
@@ -349,11 +357,11 @@ if archivo_cargado is not None:
             fuente = df_agrupado_sankey['Origen'].map(nodo_a_id).tolist()
             destino = df_agrupado_sankey['Destino'].map(nodo_a_id).tolist()
             valores = df_agrupado_sankey['Kilos'].tolist()
-            etiquetas_flujo = df_agrupado_sankey['Tipo_Movimiento'].tolist() #NUEVO 
+            etiquetas_flujo = df_agrupado_sankey['Tipo_Movimiento'].tolist()
 
             fig_sankey = go.Figure(data=[go.Sankey(
                 node=dict(pad=18, thickness=25, line=dict(color="black", width=0.5), label=nodos_sankey, color="teal"),
-                link=dict(source=fuente, target=destino, value=valores, color="rgba(102, 187, 106, 0.4)")
+                link=dict(source=fuente, target=destino, value=valores, label=etiquetas_flujo, color="rgba(102, 187, 106, 0.4)")
             )])
             
             fig_sankey.update_layout(title_text=f"Mapa de Distribución de Kilos: {articulo_sel}", height=550)
