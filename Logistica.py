@@ -16,8 +16,9 @@ if archivo_cargado is not None:
         @st.cache_data
         def cargar_y_procesar(file):
            # 1. Leer el Excel
-            df = pd.read_excel(file)
+            df = pd.read_excel(file, sheet_name=0)
             df.columns = df.columns.str.strip()
+            
             # 2. Forzar Fecha
             df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
             # 3. Forzar Cantidad a Número Puro
@@ -35,14 +36,10 @@ if archivo_cargado is not None:
             clientes_dict = {}
             try:
                 df_clientes = pd.read_excel(file, sheet_name="CLIENTES")
-                # Pasamos columnas a mayúsculas para no fallar por 'Localidad' vs 'LOCALIDAD'
                 df_clientes.columns = df_clientes.columns.str.strip().str.upper()
                 
                 for _, row in df_clientes.iterrows():
-                    # Usamos el código/nombre del cliente como llave única
                     id_cliente = str(row['NOMBRE']).strip().upper()
-                    
-                    # Limpieza de coordenadas para evitar errores si hay celdas vacías
                     lat_c = pd.to_numeric(row['LAT'], errors='coerce')
                     lon_c = pd.to_numeric(row['LONG'], errors='coerce')
                     loc_name = str(row['LOCALIDAD']).split(',')[0] if 'LOCALIDAD' in df_clientes.columns else "Cliente"
@@ -55,7 +52,7 @@ if archivo_cargado is not None:
                         }
             except Exception as e:
                 st.sidebar.warning(f"Aviso en pestaña 'CLIENTES': {e}")
-                 
+
             # --- LEER HOJA DE DEPOSITOS DINÁMICA ---
             coordenadas_dict = {}
             try:
@@ -110,7 +107,7 @@ if archivo_cargado is not None:
             except Exception:
                 pass
             return None
-        df_base, COORDENADAS = cargar_y_procesar(archivo_cargado)
+        df_base, COORDENADAS, clientes_dict = cargar_y_procesar(archivo_cargado)
         geojson_provincias = obtener_geojson_provincias()
 
         # --------------------- FILTROS ---
@@ -119,24 +116,25 @@ if archivo_cargado is not None:
         # Filtro por Familia primero, para acotar
         familias = sorted(df_base['FAMILIA'].dropna().astype(str).unique())
         familia_sel = st.sidebar.selectbox("1. Filtrar por Familia:", ["TODAS"] + familias)
-        
         df_f = df_base if familia_sel == "TODAS" else df_base[df_base['FAMILIA'].astype(str) == familia_sel]
         
         # Filtro por Artículo
         articulos = sorted(df_f['NomArticulo'].dropna().astype(str).unique())
         articulo_sel = st.sidebar.selectbox("2. Selecciona el Producto:", articulos)
-        
         df_filtrado = df_f[df_f['NomArticulo'] == articulo_sel].copy()
-
         df_articulo = df_f[df_f['NomArticulo'] == articulo_sel].copy()
-        
+
+        # COMANDO: Control de apertura geográfica solicitado
+        st.sidebar.markdown("---")
+        st.sidebar.header("⚙️ Configuración del Mapa")
+        apertura_cliente_sel = st.sidebar.radio("Apertura Cliente:", ["NO", "SI"], index=0, help="Determina si el mapa proyecta los clientes individualmente o consolidados.")
+        apertura_cliente = (apertura_cliente_sel == "SI")        
+
         # ----------------------- LÓGICA DE CONTROL DEL TIEMPO (REPRODUCTOR) ---
         st.sidebar.markdown("---")
         st.sidebar.header("⏱️ Control del Tiempo")
+        meses_disponibles = sorted(df_articulo['MES'].dropna().unique())
 
-        # Obtenemos los meses únicos ordenados para este artículo
-        meses_disponibles = sorted(df_articulo['MES'].unique())
-        
         if len(meses_disponibles) > 0:
             # Inicializamos en el último índice (el final de la lista)
             ultimo_indice = len(meses_disponibles) - 1
@@ -151,20 +149,15 @@ if archivo_cargado is not None:
                 st.session_state.mes_index = ultimo_indice
                 st.session_state.ultimo_articulo_visto = articulo_sel
             
-            # Botón de Play
             boton_play = st.sidebar.button("▶️ Reproducir Evolución")
             
             if boton_play:
-            # Si le dan Play, forzamos a que empiece en el mes 0 y corra hacia el final
-                for i, m in enumerate(meses_disponibles):
+                for i in range(len(meses_disponibles)):
                     st.session_state.mes_index = i
-                    st.sidebar.text(f"Acumulando hasta: {m}")
-                    time.sleep(1.2)
-                    
-                    # Hacemos un rerun manual excepto en el último frame para evitar bucles infinitos
+                    time.sleep(0.8)
                     if i < ultimo_indice:
                         st.rerun()
-            
+
             # El control deslizante ahora toma por defecto la posición actual guardada (que arranca al final)
             mes_seleccionado = st.sidebar.select_slider(
                 "Hasta el mes:", 
@@ -175,8 +168,6 @@ if archivo_cargado is not None:
 
             # Sincronizamos el estado si el usuario mueve el slider manualmente
             st.session_state.mes_index = meses_disponibles.index(mes_seleccionado)
-
-            # Filtrado acumulativo en el tiempo
             df_filtrado = df_articulo[df_articulo['MES'] <= mes_seleccionado].copy()
         else:
             df_filtrado = df_articulo
@@ -201,9 +192,12 @@ if archivo_cargado is not None:
         #    st.info("No se registraron registros de Stock Inicial (INI) para este producto.")
         #st.markdown("---")
 
-        # ------------------------------ LÓGICA DE DERIVACIÓN DE ORIGEN Y DESTINO ---
-        orig_dest = []
-        volumen_por_localidad = {}
+        # ==================================================================
+        # LÓGICA 1: PREPARACIÓN EXCLUSIVA PARA EL SANKEY Y EL MAPA DE FLUJO
+        # ==================================================================
+
+        orig_dest_sankey = []
+               
         for idx, row in df_filtrado.iterrows():
                         
             tp = str(row['TP']).strip()
@@ -214,8 +208,7 @@ if archivo_cargado is not None:
             #if tp in ["SIN_TP", "TRANSITO"] or dep == "DESCONOCIDO":
             if tp in ["SIN_TP"] or dep == "DESCONOCIDO":
                 continue                
-            
-            # Forzamos que los kilos sean flotantes
+        
             kg = float(row['Cantidad'])
             lote = row['NroLote']
             
@@ -225,28 +218,14 @@ if archivo_cargado is not None:
 
             orig, dest = None, None
             
-            if tp in ['CPRA', 'FOB']:
+            if tp in ['FOB']:
                 orig, dest = "Proveedor Ext.", dep
+            elif tp == 'CPRA':
+                orig, dest = "Proveedor Local", dep
             elif tp == 'INI':
                 orig, dest = "Stock Inicial (Virt.)", dep
             elif tp == 'CMV':
-                # orig, dest = dep, "Cliente (Venta)"
-                id_cliente = str(row['NOMBRE']).strip().upper()
-    
-                # Si el cliente existe en nuestra base con coordenadas propias:
-                if id_cliente in clientes_dict:
-                    orig = dep
-                    dest = f"CLI_{id_cliente}" # ID único para el destino
-                    # Guardamos la coordenada sobre la marcha en el diccionario global COORDENADAS
-                    COORDENADAS[dest] = {
-                        "lat": clientes_dict[id_cliente]['lat'], 
-                        "lon": clientes_dict[id_cliente]['lon'],
-                        "nombre_real": clientes_dict[id_cliente]['localidad']
-                    }
-                else:
-                    # Respaldo por si ese cliente no está mapeado aún
-                    orig, dest = dep, "CLIENTE (VENTA)"
-
+                orig, dest = dep, "Cliente (Venta)"
             elif tp == 'Baja_PRODUCC':
                 orig, dest = dep, "Baja/Merma Proceso"
             elif tp == 'PRODUCC':
@@ -268,124 +247,180 @@ if archivo_cargado is not None:
             # Si es FIN o no aplica, lo salteamos del flujo direccional
             if orig and dest:
 
+                orig_dest_sankey.append({'Fecha': row['Fecha'], 'Lote': row['NroLote'], 'Origen': orig, 'Destino': dest, 'Kilos': abs(kg)})
+                
+        df_flujo_sankey = pd.DataFrame(orig_dest_sankey)
+
+        # =========================================================
+        # LÓGICA 2: PREPARACIÓN EXCLUSIVA PARA EL MAPA GEOGRÁFICO
+        # =========================================================
+
+        orig_dest_mapa = []
+        volumen_por_localidad = {}
+
+        for idx, row in df_filtrado.iterrows():
+            tp = row['TP']
+            dep = row['DEPOSITO'].upper()
+
+            if tp in ["SIN_TP"] or dep == "DESCONOCIDO":
+                continue                
+        
+            kg = float(row['Cantidad'])
+            lote = row['NroLote']
+            
+            if lote == "SIN_LOTE" or lote == "nan":
+                continue
+
+            orig, dest = None, None
+            
+            if tp in ['FOB']:
+                orig, dest = "Proveedor Ext.", dep
+            elif tp == 'CPRA':
+                orig, dest = "Proveedor Local", dep
+            elif tp == 'INI':
+                orig, dest = "Stock Inicial (Virt.)", dep
+            elif tp == 'CMV':
+                id_cliente = str(row['NOMBRE']).strip().upper()
+                
+                # Evaluación del botón de comando de apertura
+                if apertura_cliente and (id_cliente in clientes_dict):
+                    orig = dep
+                    dest = f"CLI_{id_cliente}_{idx}" # Token único por fila para mapa detallado
+                    COORDENADAS[dest] = {
+                        "lat": clientes_dict[id_cliente]['lat'],
+                        "lon": clientes_dict[id_cliente]['lon'],
+                        "display_name": f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad']})"
+                    }
+                else:
+                    orig, dest = dep, "CLIENTE (VENTA)"
+            elif tp == 'PRODUCC': 
+                orig, dest = ("LINEA PROCESO (VIRT.)", dep) if kg > 0 else (dep, "LINEA PROCESO (VIRT.)")
+            elif tp == 'TRANSITO': 
+                orig, dest = (dep, "MERCADERÍA EN TRÁNSITO") if kg < 0 else ("MERCADERÍA EN TRÁNSITO", dep)
+            elif tp in ['Ajuste', 'Ajuste_Evol']: 
+                orig, dest = ("AJUSTES DE INVENTARIO", dep) if kg > 0 else (dep, "AJUSTES DE INVENTARIO")
+
+            if orig and dest:
                 orig_u = orig.upper()
                 dest_u = dest.upper()
                 kg_abs = abs(kg)
-                orig_dest.append({'Fecha': row['Fecha'], 'Lote': row['NroLote'], 'Origen': orig, 'Destino': dest, 'Kilos': abs(kg)})
-
-                # SE SUMA ACÁ: Acumulamos el volumen total que "tocó" cada punto físico o virtual
+                orig_dest_mapa.append({'Origen': orig_u, 'Destino': dest_u, 'Kilos': kg_abs, 'TP': tp})
                 volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
                 volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
 
-        df_flujo = pd.DataFrame(orig_dest)
+        df_flujo_mapa = pd.DataFrame(orig_dest_mapa)
 
-        if df_flujo.empty:
-            st.warning("No se generaron flujos para el producto seleccionado con los códigos de movimiento actuales.")
-        else:
+        # --- DISPARO DE COMPONENTES EN PANTALLA ---
 
-            # --- DETECCIÓN DE INEFICIENCIAS (RULOS POR LOTE) ---
-            st.subheader("⚠️ Alertas de Ineficiencias y Rulos Logísticos")
+        # --- DETECCIÓN DE INEFICIENCIAS (RULOS POR LOTE) ---
+        st.subheader("⚠️ Alertas de Ineficiencias y Rulos Logísticos")
             
-            df_internos = df_flujo[
-                ~df_flujo['Origen'].str.contains("Proveedor|Inicial|Ajustes|Linea") & 
-                ~df_flujo['Destino'].str.contains("Cliente|Baja|Ajustes|Linea")
-            ]
+        df_internos = df_flujo_sankey[
+            ~df_flujo_sankey['Origen'].str.contains("Proveedor|Inicial|Ajustes|Linea") & 
+            ~df_flujo_sankey['Destino'].str.contains("Cliente|Baja|Ajustes|Linea")
+        ]
+        
+        if not df_internos.empty:
+            movimientos_por_lote = df_internos.groupby('Lote').size()
+            lotes_con_rulos = movimientos_por_lote[movimientos_por_lote > 1]
             
-            if not df_internos.empty:
-                movimientos_por_lote = df_internos.groupby('Lote').size()
-                lotes_con_rulos = movimientos_por_lote[movimientos_por_lote > 1]
-                
-                if not lotes_con_rulos.empty:
-                    st.error(f"Se detectaron {len(lotes_con_rulos)} Lotes con re-despacho interno en este mes.")
-                    df_alertas_lote = df_flujo[df_flujo['Lote'].isin(lotes_con_rulos.index)].copy()
-                    df_alertas_lote['Fecha'] = df_alertas_lote['Fecha'].dt.strftime('%Y-%m-%d')
-                    st.dataframe(df_alertas_lote[['Lote', 'Fecha', 'Origen', 'Destino', 'Kilos']].sort_values(by=['Lote', 'Fecha']), hide_index=True, use_container_width=True)
-                else:
-                    st.success("✅ ¡Logística Interna Eficiente! Sin rulos detectados en este período.")
+            if not lotes_con_rulos.empty:
+                st.error(f"Se detectaron {len(lotes_con_rulos)} Lotes con re-despacho interno en este mes.")
+                df_alertas_lote = df_flujo_sankey[df_flujo_sankey['Lote'].isin(lotes_con_rulos.index)].copy()
+                df_alertas_lote['Fecha'] = df_alertas_lote['Fecha'].dt.strftime('%Y-%m-%d')
+                st.dataframe(df_alertas_lote[['Lote', 'Fecha', 'Origen', 'Destino', 'Kilos']].sort_values(by=['Lote', 'Fecha']), hide_index=True, use_container_width=True)
             else:
-                st.info("No se registran movimientos inter-depósitos en este mes.")
-            st.markdown("---")
+                st.success("✅ ¡Logística Interna Eficiente! Sin rulos detectados en este período.")
+        else:
+            st.info("No se registran movimientos inter-depósitos en este mes.")
+        st.markdown("---")
 
-            # --- DIBUJO DEL MAPA DE FLUJO (SANKEY) ---
-            nodos = list(pd.concat([df_flujo['Origen'], df_flujo['Destino']]).unique())
-            nodo_a_id = {nodo: i for i, nodo in enumerate(nodos)}
+        # --- DIBUJO DEL MAPA DE FLUJO (SANKEY) ---
+        st.subheader("Mapa de Flujo (Sankey)")
+        if df_flujo_sankey.empty:
+                st.info("Sin datos para consolidar gráfico de Sankey.")
+        else:
+            nodos_sankey = list(pd.concat([df_flujo_sankey['Origen'], df_flujo_sankey['Destino']]).unique())
+            nodo_a_id = {nodo: i for i, nodo in enumerate(nodos_sankey)}
+            df_agrupado_sankey = df_flujo_sankey.groupby(['Origen', 'Destino', 'Tipo_Movimiento'], as_index=False)['Kilos'].sum()
 
-            df_agrupado = df_flujo.groupby(['Origen', 'Destino'], as_index=False)['Kilos'].sum()
+            fuente = df_agrupado_sankey['Origen'].map(nodo_a_id).tolist()
+            destino = df_agrupado_sankey['Destino'].map(nodo_a_id).tolist()
+            valores = df_agrupado_sankey['Kilos'].tolist()
+            etiquetas_flujo = df_agrupado_sankey['Tipo_Movimiento'].tolist() #NUEVO 
 
-            fuente = df_agrupado['Origen'].map(nodo_a_id).tolist()
-            destino = df_agrupado['Destino'].map(nodo_a_id).tolist()
-            valores = df_agrupado['Kilos'].tolist()
-
-            fig = go.Figure(data=[go.Sankey(
-                node=dict(pad=18, thickness=25, line=dict(color="black", width=0.5), label=nodos, color="teal"),
+            fig_sankey = go.Figure(data=[go.Sankey(
+                node=dict(pad=18, thickness=25, line=dict(color="black", width=0.5), label=nodos_sankey, color="teal"),
                 link=dict(source=fuente, target=destino, value=valores, color="rgba(102, 187, 106, 0.4)")
             )])
             
-            fig.update_layout(title_text=f"Mapa de Distribución de Kilos: {articulo_sel}", height=550)
-
-            # --- DESPLIEGUE VISUAL GRÁFICO Y TABLA ---
-            #c1, c2 = st.columns([3, 2])
-            #with c1:
-            st.subheader("Mapa de Flujo Dinámico")
-            st.plotly_chart(fig, use_container_width=True)
+            fig_sankey.update_layout(title_text=f"Mapa de Distribución de Kilos: {articulo_sel}", height=550)
+            st.plotly_chart(fig_sankey, use_container_width=True)
         
+            st.subheader("Detalle de Movimientos")
+            df_tabla = df_filtrado[['Fecha', 'DEPOSITO', 'NOMBRE', 'TP', 'Kilos']].copy()
+            df_tabla['Fecha'] = df_tabla['Fecha'].dt.strftime('%Y-%m-%d')
+            st.dataframe(df_tabla.sort_values(by='Fecha'), use_container_width=True, hide_index=True, height=520)
+
+            # --- SECCIÓN ENMARCADA INFERIOR: MAPA GEOGRÁFICO ---
             st.markdown("---")
         
-            #with c2:
             st.subheader("Análisis de Concentración")
             st.write("Volumen total manejado por tramo:")
-            df_tabla_ver = df_agrupado.copy()
+            df_tabla_ver = df_agrupado_sankey.copy()
             df_tabla_ver['Kilos'] = df_tabla_ver['Kilos'].map('{:,.2f}'.format)
             st.dataframe(df_tabla_ver.sort_values(by='Kilos', ascending=False), hide_index=True, use_container_width=True)
 
             st.markdown("---")
 
             # ----- MAPA GEOGRÁFICO DE DEPÓSITOS (OPCIONAL) -----
+            st.subheader("🗺️ Representación Geográfica de Entregas")
+            
+            if df_flujo_mapa.empty:
+                st.info("No hay coordenadas o tramos activos para proyectar geográficamente.")
+            else:
+                df_mapa_consolidado = df_flujo_mapa.groupby(['Origen', 'Destino', 'TP'], as_index=False)['Kilos'].sum()
+                fig_mapa = go.Figure()
 
-            # Agrupar tramos para consolidar las líneas del mapa
-            df_mapa = df_flujo.groupby(['Origen', 'Destino'], as_index=False)['Kilos'].sum()
-
-            # --- MAPA CON PLOTLY (FONDO NEGRO Y LÍNEAS VERDES) ---
-            fig = go.Figure()
-
-            # A. DIBUJAR CONTORNOS PROVINCIALES CON GEOJSON (SI ESTÁ DISPONIBLE)
-            if geojson_provincias:
-                for feature in geojson_provincias['features']:
-                    prov_name = feature['properties'].get('name', 'Provincia')
-                    geometry = feature['geometry']
-                    
-                    # Manejo de Polígonos Simples y MultiPolígonos (islas/secciones separadas)
-                    coords_list = [geometry['coordinates']] if geometry['type'] == 'Polygon' else geometry['coordinates']
-                    
-                    for polygon in coords_list:
-                        # En GeoJSON el formato de cada anillo es [[lon, lat], [lon, lat], ...]
-                        # Si está anidado (MultiPolygon), extraemos el anillo principal
-                        ring = polygon[0] if isinstance(polygon[0][0], list) else polygon
-                        lons = [pt[0] for pt in ring]
-                        lats = [pt[1] for pt in ring]
+                # A. DIBUJAR CONTORNOS PROVINCIALES CON GEOJSON (SI ESTÁ DISPONIBLE)
+                if geojson_provincias:
+                    for feature in geojson_provincias['features']:
+                        prov_name = feature['properties'].get('name', 'Provincia')
+                        geometry = feature['geometry']
+                        coords_list = [geometry['coordinates']] if geometry['type'] == 'Polygon' else geometry['coordinates']
                         
-                        fig.add_trace(go.Scattergeo(
-                            lon = lons,
-                            lat = lats,
-                            mode = 'lines',
-                            line = dict(width = 1.2, color = '#28a745'), # Línea verde constante y definida
-                            hoverinfo = 'text',
-                            text = prov_name,
-                            showlegend = False
-                        ))
-
+                        for polygon in coords_list:
+                            # En GeoJSON el formato de cada anillo es [[lon, lat], [lon, lat], ...]
+                            # Si está anidado (MultiPolygon), extraemos el anillo principal
+                            ring = polygon[0] if isinstance(polygon[0][0], list) else polygon
+                            lons = [pt[0] for pt in ring]
+                            lats = [pt[1] for pt in ring]
+                            
+                            fig_mapa.add_trace(go.Scattergeo(
+                                lon = lons,
+                                lat = lats,
+                                mode = 'lines',
+                                line = dict(width = 1.2, color = '#28a745'), # Línea verde constante y definida
+                                hoverinfo = 'text',
+                                text = prov_name,
+                                showlegend = False
+                            ))
 
             # 1. Dibujar las líneas de flujo (Vínculos geográficos)
-            max_kilos = df_mapa['Kilos'].max() if not df_mapa.empty else 1
+            max_kilos = df_mapa_consolidado['Kilos'].max() if not df_mapa_consolidado.empty else 1
             
+            # B. Líneas Logísticas Dinámicas
+            max_kilos = df_mapa_consolidado['Kilos'].max() if not df_mapa_consolidado.empty else 1
+
             # Listas para recolectar latitudes y longitudes de los tramos activos
             lats_activas = []
             lons_activas = []
 
-            for index, row in df_mapa.iterrows():
+            for index, row in df_mapa_consolidado.iterrows():
                 o_name = row['Origen']
                 d_name = row['Destino']
-                
+                tipo_p = row['TP']
+
                 # Buscamos coordenadas en la matriz, si no existen salta
                 if o_name in COORDENADAS and d_name in COORDENADAS:
                     coord_orig = COORDENADAS[o_name]
@@ -397,52 +432,45 @@ if archivo_cargado is not None:
 
                     # El grosor de la línea depende del volumen de kilos trasladados
                     grosor = max(1.5, (row['Kilos'] / max_kilos) * 8)
+                    color_linea = '#FFCC00' if tipo_p == 'CMV' else 'cyan'
                     
                     # Línea vectorizada entre Origen y Destino
-                    fig.add_trace(go.Scattergeo(
-                        lon = [coord_orig['lon'], coord_dest['lon']],
-                        lat = [coord_orig['lat'], coord_dest['lat']],
-                        mode = 'lines+markers',
-                        line = dict(width = grosor, color = 'cyan'), # Color cian para el flujo móvil
-                        marker = dict(size = 4, color = 'orange'),
-                        hoverinfo = 'text',
-                        text = f"Tramo: {o_name} ➡️ {d_name}<br>Total: {row['Kilos']:,.0f} Kg",
-                        showlegend = False
-                    ))
-
-            # C. NUEVO BLOQUE: DIBUJAR DEPOSITOS Y APLICAR EFECTO DE BRILLO (>100.000 KILOS)
-            for local_name, total_kg in volumen_por_localidad.items():
-                if local_name in COORDENADAS:
-                    c = COORDENADAS[local_name]
-                    
-                    # PASO 1: Si supera los 1000, agregamos primero un "Halo" verde flúor difuminado de fondo
-                    if total_kg >= 1000:
-                        fig.add_trace(go.Scattergeo(
-                            lon = [c['lon']], lat = [c['lat']],
-                            mode = 'markers',
-                            marker = dict(
-                                size = 22, # Tamaño expandido para simular destello
-                                color = 'rgba(0, 255, 102, 0.4)', # Verde brillante traslúcido
-                                line = dict(width = 2, color = '#00FF66') # Borde verde puro
-                            ),
-                            hoverinfo = 'skip', showlegend = False
+                    fig_mapa.add_trace(go.Scattergeo(
+                            lon = [coord_orig['lon'], coord_dest['lon']],
+                            lat = [coord_orig['lat'], coord_dest['lat']],
+                            mode = 'lines', #'lines+markers',
+                            line = dict(width = grosor, color = color_linea),
+                            #marker = dict(size = 4, color = 'orange'),
+                            hoverinfo = 'text',
+                            text = f"Tramo: {o_name} ➡️ {d_name}<br>Volumen: {row['Kilos']:,.0f} Kg ({tipo_p})",
+                            showlegend = False
                         ))
                     
-                    # PASO 2: Dibujamos el nodo central estándar encima del brillo
-                    color_nodo = '#00FF66' if total_kg >= 1000 else 'orange'
-                    tamaño_nodo = 10 if total_kg >= 1000 else 6
-                    
-                    fig.add_trace(go.Scattergeo(
-                        lon = [c['lon']], lat = [c['lat']],
-                        mode = 'markers+text',
-                        marker = dict(size = tamaño_nodo, color = color_nodo),
-                        text = local_name if total_kg >= 1000 else "", # Nombra en el mapa solo los puntos calientes
-                        textposition = "top center",
-                        hoverinfo = 'text',
-                        textfont = dict(color='white', size=10),
-                        hovertext = f"Depósito: {local_name}<br>Volumen Mapeado: {total_kg:,.0f} Kg",
-                        showlegend = False
-                    ))
+                # C. Nodos, Pins de Clientes y Brillo por Volumen
+                for local_name, total_kg in volumen_por_localidad.items():
+                    if local_name in COORDENADAS:
+                        c = COORDENADAS[local_name]
+                        is_cliente = local_name.startswith("CLI_")
+                        label_mapa = c.get("display_name", local_name)
+                        
+                        if total_kg >= 100000 and not is_cliente:
+                            fig_mapa.add_trace(go.Scattergeo(
+                                lon = [c['lon']], lat = [c['lat']], mode = 'markers',
+                                marker = dict(size = 22, color = 'rgba(0, 255, 102, 0.35)', line = dict(width = 1.5, color = '#00FF66')),
+                                hoverinfo = 'skip', showlegend = False
+                            ))
+                        
+                        if is_cliente:
+                            color_nodo, tamaño_nodo = '#EFF542', 7
+                        else:
+                            color_nodo = '#00FF66' if total_kg >= 100000 else 'orange'
+                            tamaño_nodo = 10 if total_kg >= 100000 else 6
+                        
+                        fig_mapa.add_trace(go.Scattergeo(
+                            lon = [c['lon']], lat = [c['lat']], mode = 'markers',
+                            marker = dict(size = tamaño_nodo, color = color_nodo), hoverinfo = 'text',
+                            hovertext = f"{label_mapa}<br>Volumen Acumulado: {total_kg:,.0f} Kg", showlegend = False
+                        ))
 
             # 2. Configurar la estética del Layout (Límites de provincias en VERDE, Fondo NEGRO)
             if lats_activas and lons_activas:
@@ -454,7 +482,7 @@ if archivo_cargado is not None:
                 min_lat, max_lat = -56.0, -21.0
                 min_lon, max_lon = -75.0, -52.0
             
-            fig.update_layout(
+            fig_mapa.update_layout(
                 title_text = f"Flujo Geográfico Acumulado hasta {mes_seleccionado} (Kilos)",
                 showlegend = False,
                 height = 700,
@@ -480,8 +508,13 @@ if archivo_cargado is not None:
 
             # --- RENDERIZADO EN STREAMLIT ---
             st.subheader("Mapa de Rutas Activas")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig_mapa, use_container_width=True)
     
+            st.markdown("##### Resumen de Tramos Geográficos")
+            df_tabla_geo = df_mapa_consolidado.copy()
+            df_tabla_geo['Kilos'] = df_tabla_geo['Kilos'].map('{:,.0f}'.format)
+            st.dataframe(df_tabla_geo.sort_values(by='Kilos', ascending=False), hide_index=True, use_container_width=True, height=580)
+
     except Exception as e:
         st.error(f"Error procesando el archivo: {e}")
                 
