@@ -312,16 +312,8 @@ if archivo_cargado is not None:
             )
 
             # --- RENDERIZADO EN STREAMLIT ---
-            c1, c2 = st.columns([3, 2])
-            with c1:
-                st.subheader("Mapa de Rutas Activas")
-                st.plotly_chart(fig, use_container_width=True)
-            with c2:
-                st.subheader("Concentración Geográfica (Kilos)")
-                df_tabla_geo = df_mapa.copy()
-                df_tabla_geo['Kilos'] = df_tabla_geo['Kilos'].map('{:,.2f}'.format)
-                st.dataframe(df_tabla_geo.sort_values(by='Origen'), hide_index=True, use_container_width=True)
-
+            st.subheader("Mapa de Rutas Activas")
+            st.plotly_chart(fig, use_container_width=True)
     
     except Exception as e:
         st.error(f"Error procesando el archivo: {e}")
