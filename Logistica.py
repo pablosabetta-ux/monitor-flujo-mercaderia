@@ -224,17 +224,20 @@ if archivo_cargado is not None:
             fig.update_layout(title_text=f"Mapa de Distribución de Kilos: {articulo_sel}", height=550)
 
             # --- DESPLIEGUE VISUAL GRÁFICO Y TABLA ---
-            c1, c2 = st.columns([3, 2])
-            with c1:
-                st.subheader("Mapa de Flujo Dinámico")
-                st.plotly_chart(fig, use_container_width=True)
-            with c2:
-                st.subheader("Análisis de Concentración")
-                st.write("Volumen total manejado por tramo:")
-                df_tabla_ver = df_agrupado.copy()
-                df_tabla_ver['Kilos'] = df_tabla_ver['Kilos'].map('{:,.2f}'.format)
-                st.dataframe(df_tabla_ver.sort_values(by='Kilos', ascending=False), hide_index=True, use_container_width=True)
-    
+            #c1, c2 = st.columns([3, 2])
+            #with c1:
+            st.subheader("Mapa de Flujo Dinámico")
+            st.plotly_chart(fig, use_container_width=True)
+        
+            st.markdown("---")
+        
+            #with c2:
+            st.subheader("Análisis de Concentración")
+            st.write("Volumen total manejado por tramo:")
+            df_tabla_ver = df_agrupado.copy()
+            df_tabla_ver['Kilos'] = df_tabla_ver['Kilos'].map('{:,.2f}'.format)
+            st.dataframe(df_tabla_ver.sort_values(by='Kilos', ascending=False), hide_index=True, use_container_width=True)
+
     except Exception as e:
         st.error(f"Error procesando el archivo: {e}")
 else:
