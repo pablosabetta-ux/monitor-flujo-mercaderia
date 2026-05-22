@@ -383,7 +383,7 @@ if archivo_cargado is not None:
                     showland = True,
                     landcolor = '#000000',      # Superficie terrestre negra
                     showlakes = True,
-                    showsubunits = True,        # Activa la división provincial
+                    showsubunits = False,        # DesActiva la división provincial
                     subunitcolor = '#00FF66',   # Verde brillante/eléctrico de alto contraste
                     subunitwidth = 3,         # Grosor de la línea del límite interprovincial
                     lonaxis = dict(range=[min_lon, max_lon]), # Rango dinámico calculado
