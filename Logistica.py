@@ -131,7 +131,7 @@ if archivo_cargado is not None:
 
             # MODIFICACIÓN: Agregamos 'INI' a la lista de exclusión. Ya NO genera flechas de flujo.
             #if tp in ["SIN_TP", "FIN", "INI"] or dep == "DESCONOCIDO":
-            if tp in ["SIN_TP"] or dep == "DESCONOCIDO":
+            if tp in ["SIN_TP", "TRANSITO"] or dep == "DESCONOCIDO":
                 continue                
             
             # Forzamos que los kilos sean flotantes
