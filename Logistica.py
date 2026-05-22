@@ -72,7 +72,7 @@ if archivo_cargado is not None:
             
             # Selector manual (se sincroniza con la animación)
             mes_seleccionado = st.sidebar.select_slider(
-                "Mes bajo análisis:", 
+                "Hasta el mes:", 
                 options=meses_disponibles,
                 value=meses_disponibles[st.session_state.mes_index]
             )
@@ -83,8 +83,7 @@ if archivo_cargado is not None:
                     st.session_state.mes_index = i
                     # Forzamos el cambio del mes actual en la iteración
                     mes_seleccionado = m
-                    # Mensaje temporal en la barra lateral para saber qué mes corre
-                    st.sidebar.text(f"Mostrando: {m}")
+                    st.sidebar.text(f"Acumulando hasta: {m}")
                     
                     # Ejecutamos el renderizado interno simulando frames de video
                     # Nota: Streamlit necesita vaciar y redibujar componentes dinámicos
@@ -92,7 +91,7 @@ if archivo_cargado is not None:
                     st.rerun()
 
             # Filtrado final de datos por el mes activo (ya sea manual o por animación)
-            df_filtrado = df_articulo[df_articulo['MES'] == mes_seleccionado].copy()
+            df_filtrado = df_articulo[df_articulo['MES'] <= mes_seleccionado].copy()
             st.info(f"📅 Período visualizado actualmente: **{mes_seleccionado}**")
         else:
             df_filtrado = df_articulo
