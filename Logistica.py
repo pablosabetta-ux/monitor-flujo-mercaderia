@@ -35,19 +35,27 @@ if archivo_cargado is not None:
             clientes_dict = {}
             try:
                 df_clientes = pd.read_excel(file, sheet_name="CLIENTES")
+                # Pasamos columnas a mayúsculas para no fallar por 'Localidad' vs 'LOCALIDAD'
                 df_clientes.columns = df_clientes.columns.str.strip().str.upper()
                 
-                # Mapeamos usando el documento/nombre como llave
                 for _, row in df_clientes.iterrows():
+                    # Usamos el código/nombre del cliente como llave única
                     id_cliente = str(row['NOMBRE']).strip().upper()
-                    clientes_dict[id_cliente] = {
-                        "localidad": str(row['LOCALIDAD']),
-                        "lat": float(row['LAT']),
-                        "lon": float(row['LONG'])
-                    }
+                    
+                    # Limpieza de coordenadas para evitar errores si hay celdas vacías
+                    lat_c = pd.to_numeric(row['LAT'], errors='coerce')
+                    lon_c = pd.to_numeric(row['LONG'], errors='coerce')
+                    loc_name = str(row['LOCALIDAD']).split(',')[0] if 'LOCALIDAD' in df_clientes.columns else "Cliente"
+                    
+                    if not pd.isna(lat_c) and not pd.isna(lon_c):
+                        clientes_dict[id_cliente] = {
+                            "localidad": loc_name,
+                            "lat": float(lat_c),
+                            "lon": float(lon_c)
+                        }
             except Exception as e:
-                st.sidebar.warning(f"No se encontró la hoja 'CLIENTES' o faltan columnas. Detalle: {e}")
-            
+                st.sidebar.warning(f"Aviso en pestaña 'CLIENTES': {e}")
+                 
             # --- LEER HOJA DE DEPOSITOS DINÁMICA ---
             coordenadas_dict = {}
             try:
