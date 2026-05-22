@@ -12,20 +12,26 @@ if archivo_cargado is not None:
     try:
         @st.cache_data
         def cargar_y_procesar(file):
-            # Leer el Excel
+           # 1. Leer el Excel
             df = pd.read_excel(file)
             df.columns = df.columns.str.strip()
-            df['Fecha'] = pd.to_datetime(df['Fecha'])
             
-            # --- CORRECCIÓN DEL ERROR ---
-            # 'errors=coerce' transforma cualquier texto inválido (como "-" o " ") en un valor vacío (NaN)
-            df['Cantidad'] = pd.to_numeric(df['Cantidad'], errors='coerce')
-            # .fillna(0) cambia esos vacíos (NaN) por un 0 numérico puro para que se pueda operar con < o >
-            df['Cantidad'] = df['Cantidad'].fillna(0)
+            # 2. Forzar Fecha
+            df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
             
-            # Aseguramos que los lotes sean texto limpio
+            # 3. Forzar Cantidad a Número Puro
+            df['Cantidad'] = pd.to_numeric(df['Cantidad'], errors='coerce').fillna(0)
+            
+            # 4. BLINDAJE CRÍTICO: Forzar Lote a Texto Puro (así evitamos el error de comparación)
+            # Primero cambiamos los vacíos por la palabra "SIN_LOTE"
+            df['NroLote'] = df['NroLote'].fillna("SIN_LOTE")
+            # Convertimos todo a string y limpiamos espacios
             df['NroLote'] = df['NroLote'].astype(str).str.strip()
             
+            # 5. Asegurar que DEPOSITO y TP sean texto y no tengan nulos
+            df['DEPOSITO'] = df['DEPOSITO'].fillna("DESCONOCIDO").astype(str).str.strip()
+            df['TP'] = df['TP'].fillna("SIN_TP").astype(str).str.strip()
+             
             return df
 
         df_base = cargar_y_procesar(archivo_cargado)
