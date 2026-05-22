@@ -342,12 +342,12 @@ if archivo_cargado is not None:
         else:
             nodos_sankey = list(pd.concat([df_flujo_sankey['Origen'], df_flujo_sankey['Destino']]).unique())
             nodo_a_id = {nodo: i for i, nodo in enumerate(nodos_sankey)}
-            df_agrupado_sankey = df_flujo_sankey.groupby(['Origen', 'Destino', 'TP'], as_index=False)['Kilos'].sum()
+            df_agrupado_sankey = df_flujo_sankey.groupby(['Origen', 'Destino', 'Tipo_Movimiento'], as_index=False)['Kilos'].sum()
 
             fuente = df_agrupado_sankey['Origen'].map(nodo_a_id).tolist()
             destino = df_agrupado_sankey['Destino'].map(nodo_a_id).tolist()
             valores = df_agrupado_sankey['Kilos'].tolist()
-            etiquetas_flujo = df_agrupado_sankey['TP'].tolist() #NUEVO 
+            etiquetas_flujo = df_agrupado_sankey['Tipo_Movimiento'].tolist() #NUEVO 
 
             fig_sankey = go.Figure(data=[go.Sankey(
                 node=dict(pad=18, thickness=25, line=dict(color="black", width=0.5), label=nodos_sankey, color="teal"),
