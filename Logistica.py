@@ -378,8 +378,16 @@ if archivo_cargado is not None:
             st.subheader("Análisis de Concentración")
             st.write("Volumen total manejado por tramo:")
             df_tabla_ver = df_agrupado_sankey.copy()
-            df_tabla_ver['Kilos'] = df_tabla_ver['Kilos'].map('{:,.2f}'.format)
-            st.dataframe(df_tabla_ver.sort_values(by='Kilos', ascending=False), hide_index=True, use_container_width=True)
+            
+            st.dataframe(
+                df_tabla_ver.sort_values(by='Kilos', ascending=False),
+                hide_index=True,
+                use_container_width=True
+                column_config={
+                    "Kilos": st.column_config.NumberColumn(
+                        "Kilos",
+                        format="%d"  # Muestra los separadores de miles estándar del navegador
+           )
 
             st.markdown("---")
 
@@ -548,8 +556,8 @@ if archivo_cargado is not None:
                 use_container_width=True,
                 height=580,
                 column_config={
-                    "Cantidad": st.column_config.NumberColumn(
-                        "Cantidad",
+                    "Kilos": st.column_config.NumberColumn(
+                        "Kilos",
                         format="%d"  # Muestra los separadores de miles estándar del navegador
                     )
                 }
