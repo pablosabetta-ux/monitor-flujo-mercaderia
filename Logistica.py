@@ -401,7 +401,7 @@ if archivo_cargado is not None:
                         textposition = "top center",
                         hoverinfo = 'text',
                         textfont = dict(color='white', size=10),
-                        text = f"Depósito: {local_name}<br>Volumen Mapeado: {total_kg:,.0f} Kg",
+                        text = f"Depósito: {local_name}<br>Volumen Mapeado: {total_kg} Kg",
                         showlegend = False
                     ))
 
