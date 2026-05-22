@@ -341,9 +341,10 @@ if archivo_cargado is not None:
                     coastlinecolor = '#1e7e34',  # Costa verde oscura
                     showland = True,
                     landcolor = '#000000',      # Superficie terrestre negra
-                    showlakes = False,
-                    subunitcolor = '#28a745',   # ¡Límites provinciales en verde brillante!
-                    showsubunits = True,        # Activar división de provincias
+                    showlakes = True,
+                    showsubunits = True,        # Activa la división provincial
+                    subunitcolor = '#00FF66',   # Verde brillante/eléctrico de alto contraste
+                    subunitwidth = 1.5,         # Grosor de la línea del límite interprovincial
                     lonaxis = dict(range=[min_lon, max_lon]), # Rango dinámico calculado
                     lataxis = dict(range=[min_lat, max_lat]), # Rango dinámico calculado
                     bgcolor = '#000000'         # Fondo general del recuadro negro
