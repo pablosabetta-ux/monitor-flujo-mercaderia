@@ -53,11 +53,13 @@ if archivo_cargado is not None:
         
         df_filtrado = df_f[df_f['NomArticulo'] == articulo_sel].copy()
 
+        df_articulo = df_f[df_f['NomArticulo'] == articulo_sel].copy()
+        
         # --- LÓGICA DE CONTROL DEL TIEMPO (REPRODUCTOR) ---
         st.sidebar.markdown("---")
         st.sidebar.header("⏱️ Control del Tiempo")
 
-# Obtenemos los meses únicos ordenados para este artículo
+        # Obtenemos los meses únicos ordenados para este artículo
         meses_disponibles = sorted(df_articulo['MES'].unique())
         
         if len(meses_disponibles) > 0:
@@ -150,27 +152,28 @@ if archivo_cargado is not None:
         if df_flujo.empty:
             st.warning("No se generaron flujos para el producto seleccionado con los códigos de movimiento actuales.")
         else:
+
             # --- DETECCIÓN DE INEFICIENCIAS (RULOS POR LOTE) ---
             st.subheader("⚠️ Alertas de Ineficiencias y Rulos Logísticos")
             
-            # Buscamos lotes que se hayan movido más de una vez en movimientos internos
-            # Excluimos Proveedores y Clientes para medir eficiencia interna propia
-            df_internos = df_flujo[~df_flujo['Origen'].str.contains("Proveedor|Inicial") & ~df_flujo['Destino'].str.contains("Cliente|Baja")]
+            df_internos = df_flujo[
+                ~df_flujo['Origen'].str.contains("Proveedor|Inicial|Ajustes|Linea") & 
+                ~df_flujo['Destino'].str.contains("Cliente|Baja|Ajustes|Linea")
+            ]
             
-            # Contar movimientos por lote
-            movimientos_por_lote = df_internos.groupby('Lote').size()
-            lotes_con_rulos = movimientos_por_lote[movimientos_por_lote > 1]
-            
-            if not lotes_con_rulos.empty:
-                col_al1, col_al2 = st.columns([2, 1])
-                with col_al1:
-                    st.error(f"Se detectaron {len(lotes_con_rulos)} Lotes con re-despacho interno excesivo (Falso Flete).")
-                    # Detalle de esos lotes
-                    df_alertas_lote = df_flujo[df_flujo['Lote'].isin(lotes_con_rulos.index)].sort_values(by=['Lote', 'Fecha'])
-                    st.dataframe(df_alertas_lote[['Lote', 'Fecha', 'Origen', 'Destino', 'Kilos']], hide_index=True)
+            if not df_internos.empty:
+                movimientos_por_lote = df_internos.groupby('Lote').size()
+                lotes_con_rulos = movimientos_por_lote[movimientos_por_lote > 1]
+                
+                if not lotes_con_rulos.empty:
+                    st.error(f"Se detectaron {len(lotes_con_rulos)} Lotes con re-despacho interno en este mes.")
+                    df_alertas_lote = df_flujo[df_flujo['Lote'].isin(lotes_con_rulos.index)].copy()
+                    df_alertas_lote['Fecha'] = df_alertas_lote['Fecha'].dt.strftime('%Y-%m-%d')
+                    st.dataframe(df_alertas_lote[['Lote', 'Fecha', 'Origen', 'Destino', 'Kilos']].sort_values(by=['Lote', 'Fecha']), hide_index=True, use_container_width=True)
+                else:
+                    st.success("✅ ¡Logística Interna Eficiente! Sin rulos detectados en este período.")
             else:
-                st.success("✅ ¡Logística Eficiente! No se detectaron rulos ni movimientos redundantes de lotes en este producto.")
-
+                st.info("No se registran movimientos inter-depósitos en este mes.")
             st.markdown("---")
 
             # --- DIBUJO DEL MAPA DE FLUJO (SANKEY) ---
@@ -196,11 +199,12 @@ if archivo_cargado is not None:
                 st.subheader("Mapa de Flujo Dinámico")
                 st.plotly_chart(fig, use_container_width=True)
             with c2:
-                st.subheader("Cuello de Botella (Acumulación)")
-                # Agrupamos por destino para ver dónde se "frena" más mercadería
-                st.write("Kilos totales recibidos por nodo destino en el período:")
-                st.dataframe(df_agrupado.sort_values(by='Kilos', ascending=False), hide_index=True)
-
+                st.subheader("Análisis de Concentración")
+                st.write("Volumen total manejado por tramo:")
+                df_tabla_ver = df_agrupado.copy()
+                df_tabla_ver['Kilos'] = df_tabla_ver['Kilos'].map('{:,.2f}'.format)
+                st.dataframe(df_tabla_ver.sort_values(by='Kilos', ascending=False), hide_index=True, use_container_width=True)
+    
     except Exception as e:
         st.error(f"Error procesando el archivo: {e}")
 else:
