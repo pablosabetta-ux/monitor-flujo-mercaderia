@@ -17,9 +17,15 @@ if archivo_cargado is not None:
             df.columns = df.columns.str.strip()
             df['Fecha'] = pd.to_datetime(df['Fecha'])
             
-            # Reemplazar nombres de columnas conflictivos o asegurar tipos
-            df['Cantidad'] = pd.to_numeric(df['Cantidad'], errors='coerce').fillna(0)
+            # --- CORRECCIÓN DEL ERROR ---
+            # 'errors=coerce' transforma cualquier texto inválido (como "-" o " ") en un valor vacío (NaN)
+            df['Cantidad'] = pd.to_numeric(df['Cantidad'], errors='coerce')
+            # .fillna(0) cambia esos vacíos (NaN) por un 0 numérico puro para que se pueda operar con < o >
+            df['Cantidad'] = df['Cantidad'].fillna(0)
+            
+            # Aseguramos que los lotes sean texto limpio
             df['NroLote'] = df['NroLote'].astype(str).str.strip()
+            
             return df
 
         df_base = cargar_y_procesar(archivo_cargado)
