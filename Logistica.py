@@ -541,8 +541,19 @@ if archivo_cargado is not None:
     
             st.markdown("##### Resumen de Tramos Geográficos")
             df_tabla_geo = df_mapa_consolidado.copy()
-            df_tabla_geo['Kilos'] = df_tabla_geo['Kilos'].map('{:,.0f}'.format)
-            st.dataframe(df_tabla_geo.sort_values(by='Kilos', ascending=False), hide_index=True, use_container_width=True, height=580)
+            #df_tabla_geo['Kilos'] = df_tabla_geo['Kilos'].map('{:,.0f}'.format)
+            st.dataframe(
+                df_tabla_geo.sort_values(by='Kilos', ascending=False),
+                hide_index=True,
+                use_container_width=True,
+                height=580,
+                column_config={
+                    "Cantidad": st.column_config.NumberColumn(
+                        "Cantidad",
+                        format="%d"  # Muestra los separadores de miles estándar del navegador
+                    )
+                }
+            )
 
     except Exception as e:
         st.error(f"Error procesando el archivo: {e}")
