@@ -31,7 +31,7 @@ if archivo_cargado is not None:
             # 5. Asegurar que DEPOSITO y TP sean texto y no tengan nulos
             df['DEPOSITO'] = df['DEPOSITO'].fillna("DESCONOCIDO").astype(str).str.strip()
             df['TP'] = df['TP'].fillna("SIN_TP").astype(str).str.strip()
-             
+
             return df
 
         df_base = cargar_y_procesar(archivo_cargado)
@@ -54,14 +54,22 @@ if archivo_cargado is not None:
         # --- LÓGICA DE DERIVACIÓN DE ORIGEN Y DESTINO ---
         orig_dest = []
         for idx, row in df_filtrado.iterrows():
-            # Si la fila no tiene tipo de movimiento o depósito válido, la salteamos
-            if pd.isna(row['TP']) or pd.isna(row['DEPOSITO']):
-                continue
                         
             tp = str(row['TP']).strip()
             dep = str(row['DEPOSITO']).strip()
-            kg = row['Cantidad']
+
+            # Nos saltamos registros inválidos generados por celdas vacías en el Excel
+            if tp == "SIN_TP" or dep == "DESCONOCIDO":
+                continue
+                
+            # Forzamos que los kilos sean flotantes
+            kg = float(row['Cantidad'])
+            lote = row['NroLote']
             
+            # Evitamos procesar lotes que no tengan tracking real si así lo deseamos
+            if lote == "SIN_LOTE" or lote == "nan":
+                continue
+
             orig, dest = None, None
             
             if tp in ['CPRA', 'FOB']:
