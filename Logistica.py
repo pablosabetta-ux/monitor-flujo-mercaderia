@@ -3,6 +3,19 @@ import pandas as pd
 import plotly.graph_objects as go
 import time
 
+# Matriz de coordenadas geográficas por depósito
+COORDENADAS_DEPOSITOS = {
+    "PERGAMINO DEP2": {"ciudad": "Pergamino", "lat": -33.8923, "lon": -60.5735},
+    "PERGAMINO DEP3": {"ciudad": "Pergamino", "lat": -33.8923, "lon": -60.5735},
+    "BALCARCE":        {"ciudad": "Balcarce",  "lat": -37.8471, "lon": -58.2619},
+    "CORDOBA":         {"ciudad": "Córdoba",   "lat": -31.4135, "lon": -64.1811},
+    "SANTA FE":        {"ciudad": "Rosario",   "lat": -32.9468, "lon": -60.6393},
+    # Nodos virtuales para que las compras y ventas tengan un origen/destino geográfico típico:
+    "Proveedor Ext.":  {"ciudad": "Puerto BSAS","lat": -34.5936, "lon": -58.3715},
+    "Cliente (Venta)": {"ciudad": "Zona Núcleo","lat": -33.0000, "lon": -61.0000},
+    "Mercadería en Tránsito": {"ciudad": "Ruta", "lat": -34.0000, "lon": -60.0000},
+}
+
 # Configuración de la página de Streamlit
 st.set_page_config(layout="wide", page_title="Análisis de Ineficiencias Logísticas")
 st.title("📊 Monitor de Flujos, Ineficiencias y Cuellos de Botella")
@@ -38,7 +51,7 @@ if archivo_cargado is not None:
 
         df_base = cargar_y_procesar(archivo_cargado)
         
-        # --- FILTROS ---
+        # --------------------- FILTROS ---
         st.sidebar.header("Filtros Operativos")
         
         # Filtro por Familia primero, para acotar
@@ -55,7 +68,7 @@ if archivo_cargado is not None:
 
         df_articulo = df_f[df_f['NomArticulo'] == articulo_sel].copy()
         
-        # --- LÓGICA DE CONTROL DEL TIEMPO (REPRODUCTOR) ---
+        # ----------------------- LÓGICA DE CONTROL DEL TIEMPO (REPRODUCTOR) ---
         st.sidebar.markdown("---")
         st.sidebar.header("⏱️ Control del Tiempo")
 
@@ -126,7 +139,7 @@ if archivo_cargado is not None:
         #    st.info("No se registraron registros de Stock Inicial (INI) para este producto.")
         #st.markdown("---")
 
-        # --- LÓGICA DE DERIVACIÓN DE ORIGEN Y DESTINO ---
+        # ------------------------------ LÓGICA DE DERIVACIÓN DE ORIGEN Y DESTINO ---
         orig_dest = []
         for idx, row in df_filtrado.iterrows():
                         
@@ -238,7 +251,80 @@ if archivo_cargado is not None:
             df_tabla_ver['Kilos'] = df_tabla_ver['Kilos'].map('{:,.2f}'.format)
             st.dataframe(df_tabla_ver.sort_values(by='Kilos', ascending=False), hide_index=True, use_container_width=True)
 
+            st.markdown("---")
+
+            # ----- MAPA GEOGRÁFICO DE DEPÓSITOS (OPCIONAL) -----
+
+            # Agrupar tramos para consolidar las líneas del mapa
+            df_mapa = df_flujo.groupby(['Origen', 'Destino'], as_index=False)['Kilos'].sum()
+
+            # --- MAPA CON PLOTLY (FONDO NEGRO Y LÍNEAS VERDES) ---
+            fig = go.Figure()
+
+            # 1. Dibujar las líneas de flujo (Vínculos geográficos)
+            max_kilos = df_mapa['Kilos'].max() if not df_mapa.empty else 1
+            
+            for index, row in df_mapa.iterrows():
+                o_name = row['Origen']
+                d_name = row['Destino']
+                
+                # Buscamos coordenadas en la matriz, si no existen salta
+                if o_name in COORDENADAS_DEPOSITOS and d_name in COORDENADAS_DEPOSITOS:
+                    coord_orig = COORDENADAS_DEPOSITOS[o_name]
+                    coord_dest = COORDENADAS_DEPOSITOS[d_name]
+                    
+                    # El grosor de la línea depende del volumen de kilos trasladados
+                    grosor = max(1.5, (row['Kilos'] / max_kilos) * 8)
+                    
+                    # Línea vectorizada entre Origen y Destino
+                    fig.add_trace(go.Scattergeo(
+                        lon = [coord_orig['lon'], coord_dest['lon']],
+                        lat = [coord_orig['lat'], coord_dest['lat']],
+                        mode = 'lines+markers',
+                        line = dict(width = grosor, color = 'cyan'), # Color cian para el flujo móvil
+                        marker = dict(size = 4, color = 'orange'),
+                        hoverinfo = 'text',
+                        text = f"Tramo: {o_name} ➡️ {d_name}<br>Total: {row['Kilos']:,.0f} Kg",
+                        showlegend = False
+                    ))
+
+            # 2. Configurar la estética del Layout (Límites de provincias en VERDE, Fondo NEGRO)
+            fig.update_layout(
+                title_text = f"Flujo Geográfico Acumulado hasta {mes_seleccionado} (Kilos)",
+                showlegend = False,
+                height = 700,
+                margin = dict(l=0, r=0, t=40, b=0),
+                geo = dict(
+                    scope = 'south america',
+                    resolution = 50,
+                    showframe = False,
+                    showcoastlines = True,
+                    coastlinecolor = '#1e7e34',  # Costa verde oscura
+                    showland = True,
+                    landcolor = '#000000',      # Superficie terrestre negra
+                    showlakes = False,
+                    subunitcolor = '#28a745',   # ¡Límites provinciales en verde brillante!
+                    showsubunits = True,        # Activar división de provincias
+                    lonaxis = dict(range=[-75.0, -52.0]), # Encuadre longitudinal de Argentina
+                    lataxis = dict(range=[-56.0, -21.0]), # Encuadre latitudinal de Argentina
+                    bgcolor = '#000000'         # Fondo general del recuadro negro
+                )
+            )
+
+            # --- RENDERIZADO EN STREAMLIT ---
+            c1, c2 = st.columns([3, 2])
+            with c1:
+                st.subheader("Mapa de Rutas Activas")
+                st.plotly_chart(fig, use_container_width=True)
+            with c2:
+                st.subheader("Concentración Geográfica (Kilos)")
+                df_tabla_geo = df_mapa.copy()
+                df_tabla_geo['Kilos'] = df_tabla_geo['Kilos'].map('{:,.2f}'.format)
+                st.dataframe(df_tabla_geo.sort_values(by='Origen'), hide_index=True, use_container_width=True)
+
+    
     except Exception as e:
         st.error(f"Error procesando el archivo: {e}")
+                
 else:
     st.info("💡 Esperando archivo de movimientos para mapear ineficiencias...")
