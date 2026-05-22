@@ -40,13 +40,13 @@ if archivo_cargado is not None:
         st.sidebar.header("Filtros Operativos")
         
         # Filtro por Familia primero, para acotar
-        familias = sorted(df_base['FAMILIA'].dropna().unique())
+        familias = sorted(df_base['FAMILIA'].dropna().astype(str).unique())
         familia_sel = st.sidebar.selectbox("1. Filtrar por Familia:", ["TODAS"] + familias)
         
-        df_f = df_base if familia_sel == "TODAS" else df_base[df_base['FAMILIA'] == familia_sel]
+        df_f = df_base if familia_sel == "TODAS" else df_base[df_base['FAMILIA'].astype(str) == familia_sel]
         
         # Filtro por Artículo
-        articulos = sorted(df_f['NomArticulo'].dropna().unique())
+        articulos = sorted(df_f['NomArticulo'].dropna().astype(str).unique())
         articulo_sel = st.sidebar.selectbox("2. Selecciona el Producto:", articulos)
         
         df_filtrado = df_f[df_f['NomArticulo'] == articulo_sel].copy()
