@@ -48,6 +48,10 @@ if archivo_cargado is not None:
         # --- LÓGICA DE DERIVACIÓN DE ORIGEN Y DESTINO ---
         orig_dest = []
         for idx, row in df_filtrado.iterrows():
+            # Si la fila no tiene tipo de movimiento o depósito válido, la salteamos
+            if pd.isna(row['TP']) or pd.isna(row['DEPOSITO']):
+                continue
+                        
             tp = str(row['TP']).strip()
             dep = str(row['DEPOSITO']).strip()
             kg = row['Cantidad']
