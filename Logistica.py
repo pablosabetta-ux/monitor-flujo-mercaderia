@@ -72,9 +72,10 @@ if archivo_cargado is not None:
 
             # Protección extra: si cambiás de artículo y tiene menos meses que el anterior,
             # forzamos el índice a reajustarse al nuevo final para evitar desbordamientos.
-            if st.session_state.mes_index >= len(meses_disponibles):
+            if st.session_state.mes_index >= len(meses_disponibles) or st.session_state.get('ultimo_articulo_visto') != articulo_sel:
                 st.session_state.mes_index = ultimo_indice
-
+                st.session_state.ultimo_articulo_visto = articulo_sel
+            
             # Botón de Play
             boton_play = st.sidebar.button("▶️ Reproducir Evolución")
             
@@ -82,16 +83,19 @@ if archivo_cargado is not None:
             # Si le dan Play, forzamos a que empiece en el mes 0 y corra hacia el final
                 for i, m in enumerate(meses_disponibles):
                     st.session_state.mes_index = i
-                    mes_seleccionado = m
                     st.sidebar.text(f"Acumulando hasta: {m}")
                     time.sleep(1.2)
-                    st.rerun()
-
+                    
+                    # Hacemos un rerun manual excepto en el último frame para evitar bucles infinitos
+                    if i < ultimo_indice:
+                        st.rerun()
+            
             # El control deslizante ahora toma por defecto la posición actual guardada (que arranca al final)
             mes_seleccionado = st.sidebar.select_slider(
                 "Hasta el mes:", 
                 options=meses_disponibles,
-                value=meses_disponibles[st.session_state.mes_index]
+                value=meses_disponibles[st.session_state.mes_index],
+                key="slider_tiempo"
             )
 
             # Sincronizamos el estado si el usuario mueve el slider manualmente
