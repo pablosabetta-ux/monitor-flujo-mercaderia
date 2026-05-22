@@ -30,27 +30,53 @@ if archivo_cargado is not None:
            # 1. Leer el Excel
             df = pd.read_excel(file)
             df.columns = df.columns.str.strip()
-            
             # 2. Forzar Fecha
             df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
-            
             # 3. Forzar Cantidad a Número Puro
             df['Cantidad'] = pd.to_numeric(df['Cantidad'], errors='coerce').fillna(0)
-            
             # 4. BLINDAJE CRÍTICO: Forzar Lote a Texto Puro (así evitamos el error de comparación)
             # Primero cambiamos los vacíos por la palabra "SIN_LOTE"
             df['NroLote'] = df['NroLote'].fillna("SIN_LOTE")
             # Convertimos todo a string y limpiamos espacios
             df['NroLote'] = df['NroLote'].astype(str).str.strip()
-            
             # 5. Asegurar que DEPOSITO y TP sean texto y no tengan nulos
             df['DEPOSITO'] = df['DEPOSITO'].fillna("DESCONOCIDO").astype(str).str.strip()
             df['TP'] = df['TP'].fillna("SIN_TP").astype(str).str.strip()
 
-            return df
+            # --- LEER HOJA DE DEPOSITOS DINÁMICA ---
+            coordenadas_dict = {}
+            try:
+                df_depos = pd.read_excel(file, sheet_name="DEPOS")
+                df_depos.columns = df_depos.columns.str.strip().str.upper() # Pasamos a mayúsculas para evitar fallos de tipeo
+                
+                # Recorremos cada fila de la hoja DEPOS para armar el diccionario
+                for _, row in df_depos.iterrows():
+                    dep_name = str(row['DEPOSITO']).strip()
+                    coordenadas_dict[dep_name] = {
+                        "lat": float(row['LAT']),
+                        "lon": float(row['LONG'])
+                    }
+            except Exception as e:
+                st.sidebar.error(f"No se pudo cargar la hoja 'DEPOS'. Usando mapeo vacío. Error: {e}")
 
-        df_base = cargar_y_procesar(archivo_cargado)
-        
+            # Agregar/Asegurar los nodos virtuales que maneja la lógica de derivación
+            nodos_virtuales = {
+                "Proveedor Ext.":  {"lat": -34.5936, "lon": -58.3715}, # Puerto Buenos Aires
+                "Cliente (Venta)": {"lat": -32.9468, "lon": -60.6393}, # Rosario / Zona Núcleo
+                "Mercadería en Tránsito": {"lat": -34.3000, "lon": -59.5000}, # Punto intermedio ruta
+                "Ajustes de Inventario": {"lat": -33.8923, "lon": -60.5735},  # Base Pergamino
+                "Linea Proceso (Virt.)": {"lat": -33.8923, "lon": -60.5735},
+                "DESCONOCIDO":    {"lat": -34.6037, "lon": -58.3816},
+                "0":              {"lat": -33.8923, "lon": -60.5735}
+            }
+            
+            # Combinamos lo del Excel con los virtuales (el Excel tiene prioridad si se repite nombre)
+            COORDENADAS_FINAL = {**nodos_virtuales, **coordenadas_dict}
+
+            return df, COORDENADAS_FINAL
+
+        df_base, COORDENADAS = cargar_y_procesar(archivo_cargado)
+
         # --------------------- FILTROS ---
         st.sidebar.header("Filtros Operativos")
         
