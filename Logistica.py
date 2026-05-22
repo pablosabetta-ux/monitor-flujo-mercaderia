@@ -286,6 +286,10 @@ if archivo_cargado is not None:
             # 1. Dibujar las líneas de flujo (Vínculos geográficos)
             max_kilos = df_mapa['Kilos'].max() if not df_mapa.empty else 1
             
+            # Listas para recolectar latitudes y longitudes de los tramos activos
+            lats_activas = []
+            lons_activas = []
+
             for index, row in df_mapa.iterrows():
                 o_name = row['Origen']
                 d_name = row['Destino']
@@ -295,6 +299,10 @@ if archivo_cargado is not None:
                     coord_orig = COORDENADAS[o_name]
                     coord_dest = COORDENADAS[d_name]
                     
+                    # Guardamos los puntos para calcular el encuadre del zoom posterior
+                    lats_activas.extend([coord_orig['lat'], coord_dest['lat']])
+                    lons_activas.extend([coord_orig['lon'], coord_dest['lon']])
+
                     # El grosor de la línea depende del volumen de kilos trasladados
                     grosor = max(1.5, (row['Kilos'] / max_kilos) * 8)
                     
@@ -311,6 +319,15 @@ if archivo_cargado is not None:
                     ))
 
             # 2. Configurar la estética del Layout (Límites de provincias en VERDE, Fondo NEGRO)
+            if lats_activas and lons_activas:
+                margen = 1.5 # Grados de holgura alrededor del flujo
+                min_lat, max_lat = min(lats_activas) - margen, max(lats_activas) + margen
+                min_lon, max_lon = min(lons_activas) - margen, max(lons_activas) + margen
+            else:
+                # Valores por defecto si falla el cálculo
+                min_lat, max_lat = -56.0, -21.0
+                min_lon, max_lon = -75.0, -52.0
+            
             fig.update_layout(
                 title_text = f"Flujo Geográfico Acumulado hasta {mes_seleccionado} (Kilos)",
                 showlegend = False,
@@ -327,8 +344,8 @@ if archivo_cargado is not None:
                     showlakes = False,
                     subunitcolor = '#28a745',   # ¡Límites provinciales en verde brillante!
                     showsubunits = True,        # Activar división de provincias
-                    lonaxis = dict(range=[-75.0, -52.0]), # Encuadre longitudinal de Argentina
-                    lataxis = dict(range=[-56.0, -21.0]), # Encuadre latitudinal de Argentina
+                    lonaxis = dict(range=[min_lon, max_lon]), # Rango dinámico calculado
+                    lataxis = dict(range=[min_lat, max_lat]), # Rango dinámico calculado
                     bgcolor = '#000000'         # Fondo general del recuadro negro
                 )
             )
