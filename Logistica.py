@@ -211,8 +211,8 @@ if archivo_cargado is not None:
 
             # MODIFICACIÓN: Agregamos 'INI' a la lista de exclusión. Ya NO genera flechas de flujo.
             #if tp in ["SIN_TP", "FIN", "INI"] or dep == "DESCONOCIDO":
-            #if tp in ["SIN_TP", "TRANSITO"] or dep == "DESCONOCIDO":
-            if tp in ["SIN_TP"] or dep == "DESCONOCIDO":
+            if tp in ["SIN_TP", "TRANSITO"] or dep == "DESCONOCIDO":
+            #if tp in ["SIN_TP"] or dep == "DESCONOCIDO":
                 continue                
         
             kg = float(row['Cantidad'])
@@ -275,7 +275,7 @@ if archivo_cargado is not None:
             tp = row['TP']
             dep = row['DEPOSITO'].upper()
 
-            if tp in ["SIN_TP", "FIN", "INI"] or dep in ["#N/A", "N/A", "NAN"]:
+            if tp in ["SIN_TP", "FIN", "INI", "TRANSITO"] or dep in ["#N/A", "N/A", "NAN"]:
             #if tp in ["SIN_TP", "FIN"] or dep in ["#N/A", "N/A", "NAN"]:
                 continue            
         
