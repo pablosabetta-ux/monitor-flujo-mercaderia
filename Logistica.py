@@ -320,7 +320,7 @@ if archivo_cargado is not None:
 
             # 2. Configurar la estética del Layout (Límites de provincias en VERDE, Fondo NEGRO)
             if lats_activas and lons_activas:
-                margen = 1.5 # Grados de holgura alrededor del flujo
+                margen = 3.5 # Grados de holgura alrededor del flujo
                 min_lat, max_lat = min(lats_activas) - margen, max(lats_activas) + margen
                 min_lon, max_lon = min(lons_activas) - margen, max(lons_activas) + margen
             else:
