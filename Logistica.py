@@ -178,6 +178,7 @@ if archivo_cargado is not None:
 
         # ------------------------------ LÓGICA DE DERIVACIÓN DE ORIGEN Y DESTINO ---
         orig_dest = []
+        volumen_por_localidad = {}
         for idx, row in df_filtrado.iterrows():
                         
             tp = str(row['TP']).strip()
@@ -225,7 +226,17 @@ if archivo_cargado is not None:
             
             # Si es FIN o no aplica, lo salteamos del flujo direccional
             if orig and dest:
+
+                orig_u = orig.upper()
+                dest_u = dest.upper()
+                kg_abs = abs(kg)
                 orig_dest.append({'Fecha': row['Fecha'], 'Lote': row['NroLote'], 'Origen': orig, 'Destino': dest, 'Kilos': abs(kg)})
+
+                # SE SUMA ACÁ: Acumulamos el volumen total que "tocó" cada punto físico o virtual
+                volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
+                volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
+
+
 
         df_flujo = pd.DataFrame(orig_dest)
 
@@ -357,6 +368,40 @@ if archivo_cargado is not None:
                         marker = dict(size = 4, color = 'orange'),
                         hoverinfo = 'text',
                         text = f"Tramo: {o_name} ➡️ {d_name}<br>Total: {row['Kilos']:,.0f} Kg",
+                        showlegend = False
+                    ))
+
+            # C. NUEVO BLOQUE: DIBUJAR DEPOSITOS Y APLICAR EFECTO DE BRILLO (>100.000 KILOS)
+            for local_name, total_kg in volumen_por_localidad.items():
+                if local_name in COORDENADAS:
+                    c = COORDENADAS[local_name]
+                    
+                    # PASO 1: Si supera los 1000, agregamos primero un "Halo" verde flúor difuminado de fondo
+                    if total_kg >= 1000:
+                        fig.add_trace(go.Scattergeo(
+                            lon = [c['lon']], lat = [c['lat']],
+                            mode = 'markers',
+                            marker = dict(
+                                size = 22, # Tamaño expandido para simular destello
+                                color = 'rgba(0, 255, 102, 0.4)', # Verde brillante traslúcido
+                                line = dict(width = 2, color = '#00FF66') # Borde verde puro
+                            ),
+                            hoverinfo = 'skip', showlegend = False
+                        ))
+                    
+                    # PASO 2: Dibujamos el nodo central estándar encima del brillo
+                    color_nodo = '#00FF66' if total_kg >= 1000 else 'orange'
+                    tamaño_nodo = 10 if total_kg >= 1000 else 6
+                    
+                    fig.add_trace(go.Scattergeo(
+                        lon = [c['lon']], lat = [c['lat']],
+                        mode = 'markers+text',
+                        marker = dict(size = tamaño_nodo, color = color_nodo),
+                        text = local_name if total_kg >= 1000 else "", # Nombra en el mapa solo los puntos calientes
+                        textposition = "top center",
+                        hoverinfo = 'text',
+                        textfont = dict(color='white', size=10),
+                        text = f"Depósito: {local_name}<br>Volumen Mapeado: {total_kg:,.0f} Kg",
                         showlegend = False
                     ))
 
