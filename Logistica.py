@@ -63,36 +63,42 @@ if archivo_cargado is not None:
         meses_disponibles = sorted(df_articulo['MES'].unique())
         
         if len(meses_disponibles) > 0:
+            # Inicializamos en el último índice (el final de la lista)
+            ultimo_indice = len(meses_disponibles) - 1
+
             # Inicializamos una variable de estado en Streamlit para controlar el reproductor
             if "mes_index" not in st.session_state:
-                st.session_state.mes_index = 0
+                st.session_state.mes_index = ultimo_indice
+
+            # Protección extra: si cambiás de artículo y tiene menos meses que el anterior,
+            # forzamos el índice a reajustarse al nuevo final para evitar desbordamientos.
+            if st.session_state.mes_index >= len(meses_disponibles):
+                st.session_state.mes_index = ultimo_indice
 
             # Botón de Play
             boton_play = st.sidebar.button("▶️ Reproducir Evolución")
             
-            # Selector manual (se sincroniza con la animación)
+            if boton_play:
+            # Si le dan Play, forzamos a que empiece en el mes 0 y corra hacia el final
+                for i, m in enumerate(meses_disponibles):
+                    st.session_state.mes_index = i
+                    mes_seleccionado = m
+                    st.sidebar.text(f"Acumulando hasta: {m}")
+                    time.sleep(1.2)
+                    st.rerun()
+
+            # El control deslizante ahora toma por defecto la posición actual guardada (que arranca al final)
             mes_seleccionado = st.sidebar.select_slider(
                 "Hasta el mes:", 
                 options=meses_disponibles,
                 value=meses_disponibles[st.session_state.mes_index]
             )
-            
-            # Si el usuario le da Play, recorremos los meses con un bucle animado
-            if boton_play:
-                for i, m in enumerate(meses_disponibles):
-                    st.session_state.mes_index = i
-                    # Forzamos el cambio del mes actual en la iteración
-                    mes_seleccionado = m
-                    st.sidebar.text(f"Acumulando hasta: {m}")
-                    
-                    # Ejecutamos el renderizado interno simulando frames de video
-                    # Nota: Streamlit necesita vaciar y redibujar componentes dinámicos
-                    time.sleep(1.2) # Pausa de 1.2 segundos por mes
-                    st.rerun()
 
-            # Filtrado final de datos por el mes activo (ya sea manual o por animación)
+            # Sincronizamos el estado si el usuario mueve el slider manualmente
+            st.session_state.mes_index = meses_disponibles.index(mes_seleccionado)
+
+            # Filtrado acumulativo en el tiempo
             df_filtrado = df_articulo[df_articulo['MES'] <= mes_seleccionado].copy()
-            st.info(f"📅 Período visualizado actualmente: **{mes_seleccionado}**")
         else:
             df_filtrado = df_articulo
             st.warning("No se encontraron datos en la columna MES para este artículo.")
