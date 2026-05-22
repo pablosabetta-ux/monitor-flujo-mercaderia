@@ -3,19 +3,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import time
 
-# Matriz de coordenadas geográficas por depósito
-COORDENADAS_DEPOSITOS = {
-    "PERGAMINO DEP2": {"ciudad": "Pergamino", "lat": -33.8923, "lon": -60.5735},
-    "PERGAMINO DEP3": {"ciudad": "Pergamino", "lat": -33.8923, "lon": -60.5735},
-    "BALCARCE":        {"ciudad": "Balcarce",  "lat": -37.8471, "lon": -58.2619},
-    "CORDOBA":         {"ciudad": "Córdoba",   "lat": -31.4135, "lon": -64.1811},
-    "SANTA FE":        {"ciudad": "Rosario",   "lat": -32.9468, "lon": -60.6393},
-    # Nodos virtuales para que las compras y ventas tengan un origen/destino geográfico típico:
-    "Proveedor Ext.":  {"ciudad": "Puerto BSAS","lat": -34.5936, "lon": -58.3715},
-    "Cliente (Venta)": {"ciudad": "Zona Núcleo","lat": -33.0000, "lon": -61.0000},
-    "Mercadería en Tránsito": {"ciudad": "Ruta", "lat": -34.0000, "lon": -60.0000},
-}
-
 # Configuración de la página de Streamlit
 st.set_page_config(layout="wide", page_title="Análisis de Ineficiencias Logísticas")
 st.title("📊 Monitor de Flujos, Ineficiencias y Cuellos de Botella")
@@ -49,15 +36,24 @@ if archivo_cargado is not None:
                 df_depos = pd.read_excel(file, sheet_name="DEPOS")
                 df_depos.columns = df_depos.columns.str.strip().str.upper() # Pasamos a mayúsculas para evitar fallos de tipeo
                 
-                # Recorremos cada fila de la hoja DEPOS para armar el diccionario
-                for _, row in df_depos.iterrows():
-                    dep_name = str(row['DEPOSITO']).strip()
-                    coordenadas_dict[dep_name] = {
-                        "lat": float(row['LAT']),
-                        "lon": float(row['LONG'])
-                    }
+                # Mapeo de columnas requeridas según tu estructura del Excel
+                col_dep = 'DEPOSITO'
+                col_lat = 'LAT'
+                # Toleramos si escribiste LONG o LONGITUD en el Excel
+                col_lon = 'LONG' if 'LONG' in df_depos.columns else ('LONGITUD' if 'LONGITUD' in df_depos.columns else None)
+                
+                if col_lon and col_lat in df_depos.columns and col_dep in df_depos.columns:
+                    for _, row in df_depos.iterrows():
+                        # Guardamos la clave en MAYÚSCULAS para evitar discrepancias de tipeo (ej. "Pergamino" vs "PERGAMINO")
+                        dep_name = str(row[col_dep]).strip().upper()
+                        coordenadas_dict[dep_name] = {
+                            "lat": float(row[col_lat]),
+                            "lon": float(row[col_lon])
+                        }
+                else:
+                    st.sidebar.error("⚠️ La hoja 'DEPOS' debe tener las columnas: DEPOSITO, LAT, LONG")
             except Exception as e:
-                st.sidebar.error(f"No se pudo cargar la hoja 'DEPOS'. Usando mapeo vacío. Error: {e}")
+                st.sidebar.error(f"No se pudo procesar la hoja 'DEPOS'. Detalle: {e}")
 
             # Agregar/Asegurar los nodos virtuales que maneja la lógica de derivación
             nodos_virtuales = {
@@ -295,9 +291,9 @@ if archivo_cargado is not None:
                 d_name = row['Destino']
                 
                 # Buscamos coordenadas en la matriz, si no existen salta
-                if o_name in COORDENADAS_DEPOSITOS and d_name in COORDENADAS_DEPOSITOS:
-                    coord_orig = COORDENADAS_DEPOSITOS[o_name]
-                    coord_dest = COORDENADAS_DEPOSITOS[d_name]
+                if o_name in COORDENADAS and d_name in COORDENADAS:
+                    coord_orig = COORDENADAS[o_name]
+                    coord_dest = COORDENADAS[d_name]
                     
                     # El grosor de la línea depende del volumen de kilos trasladados
                     grosor = max(1.5, (row['Kilos'] / max_kilos) * 8)
