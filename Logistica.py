@@ -1,10 +1,12 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import time
 
 # Configuración de la página de Streamlit
 st.set_page_config(layout="wide", page_title="Análisis de Ineficiencias Logísticas")
 st.title("📊 Monitor de Flujos, Ineficiencias y Cuellos de Botella")
+st.write("Visualización dinámica del movimiento de kilos y detección de rulos logísticos.")
 
 archivo_cargado = st.file_uploader("Subí tu archivo de movimientos (Excel)", type=["xls", "xlsx"])
 
@@ -50,6 +52,49 @@ if archivo_cargado is not None:
         articulo_sel = st.sidebar.selectbox("2. Selecciona el Producto:", articulos)
         
         df_filtrado = df_f[df_f['NomArticulo'] == articulo_sel].copy()
+
+        # --- LÓGICA DE CONTROL DEL TIEMPO (REPRODUCTOR) ---
+        st.sidebar.markdown("---")
+        st.sidebar.header("⏱️ Control del Tiempo")
+
+# Obtenemos los meses únicos ordenados para este artículo
+        meses_disponibles = sorted(df_articulo['MES'].unique())
+        
+        if len(meses_disponibles) > 0:
+            # Inicializamos una variable de estado en Streamlit para controlar el reproductor
+            if "mes_index" not in st.session_state:
+                st.session_state.mes_index = 0
+
+            # Botón de Play
+            boton_play = st.sidebar.button("▶️ Reproducir Evolución")
+            
+            # Selector manual (se sincroniza con la animación)
+            mes_seleccionado = st.sidebar.select_slider(
+                "Mes bajo análisis:", 
+                options=meses_disponibles,
+                value=meses_disponibles[st.session_state.mes_index]
+            )
+            
+            # Si el usuario le da Play, recorremos los meses con un bucle animado
+            if boton_play:
+                for i, m in enumerate(meses_disponibles):
+                    st.session_state.mes_index = i
+                    # Forzamos el cambio del mes actual en la iteración
+                    mes_seleccionado = m
+                    # Mensaje temporal en la barra lateral para saber qué mes corre
+                    st.sidebar.text(f"Mostrando: {m}")
+                    
+                    # Ejecutamos el renderizado interno simulando frames de video
+                    # Nota: Streamlit necesita vaciar y redibujar componentes dinámicos
+                    time.sleep(1.2) # Pausa de 1.2 segundos por mes
+                    st.rerun()
+
+            # Filtrado final de datos por el mes activo (ya sea manual o por animación)
+            df_filtrado = df_articulo[df_articulo['MES'] == mes_seleccionado].copy()
+            st.info(f"📅 Período visualizado actualmente: **{mes_seleccionado}**")
+        else:
+            df_filtrado = df_articulo
+            st.warning("No se encontraron datos en la columna MES para este artículo.")
 
         # --- LÓGICA DE DERIVACIÓN DE ORIGEN Y DESTINO ---
         orig_dest = []
