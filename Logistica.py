@@ -367,11 +367,80 @@ if archivo_cargado is not None:
             fig_sankey.update_layout(title_text=f"Mapa de Distribución de Kilos: {articulo_sel}", height=550)
             st.plotly_chart(fig_sankey, use_container_width=True)
         
+            # ------- CUADRO DE EVOLUCION 
             st.subheader("Detalle de Movimientos")
-            df_tabla = df_filtrado[['Fecha', 'DEPOSITO', 'NOMBRE', 'TP', 'Kilos']].copy()
-            df_tabla['Fecha'] = df_tabla['Fecha'].dt.strftime('%Y-%m-%d')
-            st.dataframe(df_tabla.sort_values(by='Fecha'), use_container_width=True, hide_index=True, height=520)
+        
+            # 1. Agrupamos los datos por Depósito y Tipo de Movimiento (TP)
+            df_balance_dep = df_periodo.groupby(['DEPOSITO', 'TP'], as_index=False)['Cantidad'].sum()
 
+            # 2. Pivotamos la tabla para tener los TP como columnas individuales
+            df_pivot = df_balance_dep.pivot(index='DEPOSITO', columns='TP', values='Cantidad').fillna(0)
+
+            # 3. Aseguramos que todas las columnas de la ecuación existan (si no hay movimientos, que sea 0)
+            columnas_tp = ['INI', 'CPRA', 'FOB', 'CMV', 'PRODUCC', 'TRANSITO', 'AJUSTE', 'AJUSTE_EVOL', 'FIN']
+            for col in columnas_tp:
+                if col not in df_pivot.columns:
+                    df_pivot[col] = 0.0
+
+            # 4. Construimos las columnas de tu ecuación exacta
+            df_conciliacion = pd.DataFrame(index=df_pivot.index)
+            
+            # INICIO
+            df_conciliacion['Inicio'] = df_pivot['INI']
+            
+            # COMPRAS (Sumamos CPRA y FOB si las manejás juntas)
+            df_conciliacion['Compras'] = df_pivot['CPRA'] + df_pivot['FOB']
+            
+            # VENTAS (CMV entra restando, así que invertimos el signo para mostrar el flujo lógico salido)
+            df_conciliacion['Ventas'] = df_pivot['CMV']
+            
+            # PROCESOS (Separamos según el signo de PRODUCC: negativo es salida a proceso, positivo es ingreso)
+            # Nota: Si PRODUCC ya viene con signo en tu Excel, lo leemos directo:
+            df_conciliacion['Salidas Proceso'] = df_pivot['PRODUCC'].apply(lambda x: abs(x) if x < 0 else 0.0)
+            df_conciliacion['Ingresos Proceso'] = df_pivot['PRODUCC'].apply(lambda x: x if x > 0 else 0.0)
+            
+            # TRANSITO (+- Tránsito)
+            df_conciliacion['Tránsito'] = df_pivot['TRANSITO']
+            
+            # AJUSTES (Sumamos los tipos de ajuste)
+            df_conciliacion['Ajustes'] = df_pivot['AJUSTE'] + df_pivot['AJUSTE_EVOL']
+            
+            # FIN (Stock Final Teórico o Real de la pestaña)
+            df_conciliacion['Fin'] = df_pivot['FIN']
+
+            # 5. Si no usás la columna FIN del Excel y querés calcular la ecuación matemática pura por código:
+            # df_conciliacion['Fin'] = (df_conciliacion['Inicio'] + df_conciliacion['Compras'] - 
+            #                           df_conciliacion['Ventas'] - df_conciliacion['Salidas Proceso'] + 
+            #                           df_conciliacion['Ingresos Proceso'] + df_conciliacion['Tránsito'] + 
+            #                           df_conciliacion['Ajustes'])
+
+            # 6. Ordenamos por stock Final de mayor a menor y reseteamos el índice para que el depósito sea columna
+            df_conciliacion = df_conciliacion.sort_values(by='Fin', ascending=False).reset_index()
+            df_conciliacion = df_conciliacion.rename(columns={'DEPOSITO': 'Depósito'})
+
+            # 7. Configuración de formato numérico de Streamlit para conservar el orden correcto
+            config_columnas = {
+                "Depósito": st.column_config.TextColumn("Depósito"),
+                "Inicio": st.column_config.NumberColumn("Inicio", format="%d"),
+                "Compras": st.column_config.NumberColumn("Compras (+)", format="%d"),
+                "Ventas": st.column_config.NumberColumn("Ventas (-)", format="%d"),
+                "Salidas Proceso": st.column_config.NumberColumn("Salida Proc (-)", format="%d"),
+                "Ingresos Proceso": st.column_config.NumberColumn("Ingreso Proc (+)", format="%d"),
+                "Tránsito": st.column_config.NumberColumn("Tránsito (+/-)", format="%d"),
+                "Ajustes": st.column_config.NumberColumn("Ajustes (+/-)", format="%d"),
+                "Fin": st.column_config.NumberColumn("Fin (=)", format="%d")
+            }
+
+            # 8. Renderizamos la tabla en la interfaz
+            st.dataframe(
+                df_conciliacion,
+                hide_index=True,
+                use_container_width=True,
+                height=520,
+                column_config=config_columnas
+            )
+        
+        
             # --- SECCIÓN ENMARCADA INFERIOR: MAPA GEOGRÁFICO ---
             st.markdown("---")
         
