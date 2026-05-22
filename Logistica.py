@@ -82,15 +82,18 @@ if archivo_cargado is not None:
 
             # Agregar/Asegurar los nodos virtuales que maneja la lógica de derivación
             nodos_virtuales = {
-                "Proveedor Ext.":  {"lat": -34.5936, "lon": -58.3715}, # Puerto Buenos Aires
-                "Cliente (Venta)": {"lat": -32.9468, "lon": -60.6393}, # Rosario / Zona Núcleo
-                "Mercadería en Tránsito": {"lat": -34.3000, "lon": -59.5000}, # Punto intermedio ruta
-                "Ajustes de Inventario": {"lat": -33.8923, "lon": -60.5735},  # Base Pergamino
-                "Linea Proceso (Virt.)": {"lat": -33.8923, "lon": -60.5735},
-                "DESCONOCIDO":    {"lat": -34.6037, "lon": -58.3816},
+                "PROVEEDOR EXT.":        {"lat": -34.5936, "lon": -58.3715}, 
+                "PROVEEDOR LOCALES":     {"lat": -34.5936, "lon": -58.3715}, 
+                "CLIENTE (VENTA)":       {"lat": -32.9468, "lon": -60.6393}, 
+                "MERCADERÍA EN TRÁNSITO": {"lat": -34.3000, "lon": -59.5000}, 
+                "AJUSTES DE INVENTARIO":  {"lat": -33.8923, "lon": -60.5735}, 
+                "LINEA PROCESO (VIRT.)":  {"lat": -33.8923, "lon": -60.5735},
+                "DESCONOCIDO":            {"lat": -34.6037, "lon": -58.3816},
+                "DESPACHO DIRECTO":       {"lat": -33.8923, "lon": -60.5735},
                 "0":              {"lat": -33.8923, "lon": -60.5735}
             }
-            
+
+
             # Combinamos lo del Excel con los virtuales (el Excel tiene prioridad si se repite nombre)
             COORDENADAS_FINAL = {**nodos_virtuales, **coordenadas_dict}
 
@@ -272,8 +275,8 @@ if archivo_cargado is not None:
             tp = row['TP']
             dep = row['DEPOSITO'].upper()
 
-            #if tp in ["SIN_TP", "FIN", "INI"] or dep in ["#N/A", "N/A", "NAN"]:
-            if tp in ["SIN_TP", "FIN"] or dep in ["#N/A", "N/A", "NAN"]:
+            if tp in ["SIN_TP", "FIN", "INI"] or dep in ["#N/A", "N/A", "NAN"]:
+            #if tp in ["SIN_TP", "FIN"] or dep in ["#N/A", "N/A", "NAN"]:
                 continue            
         
             kg = float(row['Cantidad'])
@@ -424,9 +427,28 @@ if archivo_cargado is not None:
             lons_activas = []
 
             for index, row in df_mapa_consolidado.iterrows():
-                o_name = row['Origen']
-                d_name = row['Destino']
+                o_name = str(row['Origen']).upper().strip()
+                d_name = str(row['Destino']).upper().strip()
                 tipo_p = row['TP']
+
+            # Si el origen es un campo roto o no está en la base de datos de depósitos, usamos el genérico
+                if o_name not in COORDENADAS:
+                    o_name = "DESCONOCIDO"
+
+                # Si la apertura por cliente está activa y el destino es un cliente individual
+                if d_name.startswith("CLI_"):
+                    # Extraemos el código limpio del cliente (ej: de 'CLI_2200007945_10' extrae '2200007945')
+                    partes = d_name.split('_')
+                    if len(partes) >= 2:
+                        id_cliente_limpio = partes[1]
+                        # Si el cliente existe en el diccionario importado de la pestaña CLIENTES
+                        if id_cliente_limpio in clientes_dict:
+                            # Le inyectamos dinámicamente las coordenadas a la clave con ID único para que Plotly la encuentre
+                            COORDENADAS[d_name] = {
+                                "lat": clientes_dict[id_cliente_limpio]['lat'],
+                                "lon": clientes_dict[id_cliente_limpio]['lon'],
+                                "display_name": f"Cliente: {id_cliente_limpio} ({clientes_dict[id_cliente_limpio]['localidad']})"
+                            }
 
                 # Buscamos coordenadas en la matriz, si no existen salta
                 if o_name in COORDENADAS and d_name in COORDENADAS:
