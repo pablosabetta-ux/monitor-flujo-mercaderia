@@ -31,6 +31,8 @@ if archivo_cargado is not None:
             # 5. Asegurar que DEPOSITO y TP sean texto y no tengan nulos
             df['DEPOSITO'] = df['DEPOSITO'].fillna("DESCONOCIDO").astype(str).str.strip()
             df['TP'] = df['TP'].fillna("SIN_TP").astype(str).str.strip()
+            df['NomArticulo'] = df['NomArticulo'].fillna("DESCONOCIDO").astype(str).str.strip()
+            df['NOMBRE'] = df['NOMBRE'].fillna("DESCONOCIDO").astype(str).str.strip()
 
             # --- LEER HOJA "CLIENTES" ---
             clientes_dict = {}
