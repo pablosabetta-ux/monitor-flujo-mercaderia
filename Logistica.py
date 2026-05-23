@@ -380,7 +380,7 @@ if archivo_cargado is not None:
             df_pivot = df_balance_dep.pivot(index='DEPOSITO', columns='TP', values='Cantidad').fillna(0)
 
             # 3. Aseguramos que todas las columnas de la ecuación existan (si no hay movimientos, que sea 0)
-            columnas_tp = ['INI', 'CPRA', 'FOB', 'CMV', 'PRODUCC', 'TRANSITO', 'AJUSTE', 'AJUSTE_EVOL', 'FIN']
+            columnas_tp = ['INI', 'CPRA', 'FOB', 'CMV', 'Baja_PRODUCC','PRODUCC', 'TRANSITO', 'AJUSTE', 'AJUSTE_EVOL', 'FIN']
             for col in columnas_tp:
                 if col not in df_pivot.columns:
                     df_pivot[col] = 0.0
