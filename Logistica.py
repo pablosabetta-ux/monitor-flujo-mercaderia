@@ -274,12 +274,16 @@ if archivo_cargado is not None:
         orig_dest_mapa = []
         volumen_por_localidad = {}
 
+        # --- NUEVA LÓGICA DE TRÁNSITO INTELIGENTE ---
+        # Buscamos dónde sumó cada lote en los movimientos de TRANSITO
+        ingresos_transito = df_filtrado[(df_filtrado['TP'] == 'TRANSITO') & (df_filtrado['Kilos'] > 0)]
+        destino_por_lote = dict(zip(ingresos_transito['NroLote'], ingresos_transito['DEPOSITO']))
+
         for idx, row in df_filtrado.iterrows():
             tp = row['TP']
             dep = row['DEPOSITO'].upper()
 
             if tp in ["SIN_TP", "FIN", "INI"] or dep in ["#N/A", "N/A", "NAN"]:
-            #if tp in ["SIN_TP", "FIN", "INI", "TRANSITO"] or dep in ["#N/A", "N/A", "NAN"]:
             #if tp in ["SIN_TP", "FIN"] or dep in ["#N/A", "N/A", "NAN"]:
                 continue            
         
@@ -307,10 +311,24 @@ if archivo_cargado is not None:
                     }
                 else:
                     orig, dest = dep, "CLIENTE (VENTA)"
+            
             elif tp == 'PRODUCC': 
                 orig, dest = ("LINEA PROCESO (VIRT.)", dep) if kg > 0 else (dep, "LINEA PROCESO (VIRT.)")
-            elif tp == 'TRANSITO': 
-                orig, dest = (dep, "MERCADERÍA EN TRÁNSITO") if kg < 0 else ("MERCADERÍA EN TRÁNSITO", dep)
+            
+            elif tp == 'TRANSITO':
+                # Solo procesamos la fila negativa (la salida) para no duplicar el viaje
+                if kg < 0:
+                    orig = dep  # El depósito de donde sale el camión
+                    
+                    # Buscamos de forma inteligente el depósito de destino usando el lote
+                    if lote in destino_por_lote:
+                        dest = destino_por_lote[lote]  # El depósito real donde ingresó
+                    else:
+                        dest = "Mercadería en Tránsito"  # Rueda de auxilio virtual si quedó huérfano
+                else:
+                    # Si los kilos son positivos (> 0), ignoramos la fila porque ya la dibujamos con la salida
+                    continue            
+            
             elif tp in ['Ajuste', 'Ajuste_Evol']: 
                 orig, dest = ("AJUSTES DE INVENTARIO", dep) if kg > 0 else (dep, "AJUSTES DE INVENTARIO")
 
@@ -442,8 +460,8 @@ if archivo_cargado is not None:
                 "Inicio": st.column_config.NumberColumn("Inicio", format="%d"),
                 "Compras": st.column_config.NumberColumn("Compras (+)", format="%d"),
                 "Ventas": st.column_config.NumberColumn("Ventas (-)", format="%d"),
-                "Salidas Proceso": st.column_config.NumberColumn("Salida Proc (-)", format="%d"),
-                "Ingresos Proceso": st.column_config.NumberColumn("Ingreso Proc (+)", format="%d"),
+                "Salidas Proceso": st.column_config.NumberColumn("Proc Out (-)", format="%d"),
+                "Ingresos Proceso": st.column_config.NumberColumn("Proc In (+)", format="%d"),
                 "Tránsito": st.column_config.NumberColumn("Tránsito (+/-)", format="%d"),
                 "Ajustes": st.column_config.NumberColumn("Ajustes (+/-)", format="%d"),
                 "Fin": st.column_config.NumberColumn("Fin (=)", format="%d")
