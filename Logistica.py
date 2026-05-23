@@ -371,7 +371,7 @@ if archivo_cargado is not None:
             st.subheader("Detalle de Movimientos")
         
             # 1. Agrupamos los datos por Depósito y Tipo de Movimiento (TP)
-            df_balance_dep = df_periodo.groupby(['DEPOSITO', 'TP'], as_index=False)['Cantidad'].sum()
+            df_balance_dep = df_filtrado.groupby(['DEPOSITO', 'TP'], as_index=False)['Cantidad'].sum()
 
             # 2. Pivotamos la tabla para tener los TP como columnas individuales
             df_pivot = df_balance_dep.pivot(index='DEPOSITO', columns='TP', values='Cantidad').fillna(0)
