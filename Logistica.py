@@ -420,7 +420,7 @@ if archivo_cargado is not None:
             df_conciliacion['Control (=0)'] = (
                 df_conciliacion['Inicio'] + 
                 df_conciliacion['Compras'] - 
-                df_conciliacion['Ventas'] - 
+                df_conciliacion['Ventas'] + 
                 df_conciliacion['Salidas Proceso'] + 
                 df_conciliacion['Ingresos Proceso'] + 
                 df_conciliacion['Tránsito'] + 
