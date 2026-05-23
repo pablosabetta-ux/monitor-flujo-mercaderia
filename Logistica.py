@@ -396,7 +396,7 @@ if archivo_cargado is not None:
             
             # PROCESOS (Separamos según el signo de PRODUCC: negativo es salida a proceso, positivo es ingreso)
             # Nota: Si PRODUCC ya viene con signo en tu Excel, lo leemos directo:
-            df_conciliacion['Salidas Proceso'] = df_pivot['PRODUCC'].apply(lambda x: abs(x) if x < 0 else 0.0)
+            df_conciliacion['Salidas Proceso'] = df_pivot['Baja_PRODUCC'].apply(lambda x: abs(x) if x < 0 else 0.0)
             df_conciliacion['Ingresos Proceso'] = df_pivot['PRODUCC'].apply(lambda x: x if x > 0 else 0.0)
             
             # TRANSITO (+- Tránsito)
