@@ -327,24 +327,22 @@ if archivo_cargado is not None:
             elif tp == 'CMV':
                 # Si el usuario seleccionó "NO" mostrar ventas en el mapa, salteamos la fila por completo
                 # NOTA: Cambiá 'mostrar_ventas' por el nombre de tu variable del botón/checkbox si es diferente
-                if apertura_cliente=="NO":
-                    continue
-                            
-                id_cliente = row['NOMBRE']
-                #id_cliente = str(row['NOMBRE']).strip().upper()
+                if apertura_cliente=="SI":
+                    id_cliente = row['NOMBRE']
+                    #id_cliente = str(row['NOMBRE']).strip().upper()
+                    
+                    # Evaluación del botón de comando de apertura
+                    if apertura_cliente and (id_cliente in clientes_dict):
+                        orig = dep
+                        dest = f"CLI_{id_cliente}_{idx}" # Token único por fila para mapa detallado
+                        COORDENADAS[dest] = {
+                            "lat": clientes_dict[id_cliente]['lat'],
+                            "lon": clientes_dict[id_cliente]['lon'],
+                            "display_name": f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad']})"
+                        }
+                    else:
+                        orig, dest = dep, "CLIENTE (VENTA)"
                 
-                # Evaluación del botón de comando de apertura
-                if apertura_cliente and (id_cliente in clientes_dict):
-                    orig = dep
-                    dest = f"CLI_{id_cliente}_{idx}" # Token único por fila para mapa detallado
-                    COORDENADAS[dest] = {
-                        "lat": clientes_dict[id_cliente]['lat'],
-                        "lon": clientes_dict[id_cliente]['lon'],
-                        "display_name": f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad']})"
-                    }
-                else:
-                    orig, dest = dep, "CLIENTE (VENTA)"
-            
             elif tp == 'PRODUCC': 
                 orig, dest = ("LINEA PROCESO (VIRT.)", dep) if kg > 0 else (dep, "LINEA PROCESO (VIRT.)")
             
