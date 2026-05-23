@@ -202,6 +202,13 @@ if archivo_cargado is not None:
         # LÓGICA 1: PREPARACIÓN EXCLUSIVA PARA EL SANKEY Y EL MAPA DE FLUJO
         # ==================================================================
 
+        # Filtramos los ingresos de tránsito (valores positivos) y limpiamos lotes
+        ingresos_t = df_filtrado[(df_filtrado['TP'] == 'TRANSITO') & (df_filtrado['Kilos'] > 0)].copy()
+        ingresos_t['Lote_Clean'] = ingresos_t['NroLote'].astype(str).str.strip().str.upper()
+        
+        # Diccionario para saber a qué depósito fue cada lote
+        transito_por_lote = dict(zip(ingresos_t['Lote_Clean'], ingresos_t['DEPOSITO']))
+
         orig_dest_sankey = []
                
         for idx, row in df_filtrado.iterrows():
@@ -224,14 +231,16 @@ if archivo_cargado is not None:
 
             orig, dest = None, None
             
-            if tp in ['FOB']:
+            if tp == 'FOB':
                 orig, dest = "Proveedor Ext.", dep
             elif tp == 'CPRA':
                 orig, dest = "Proveedor Local", dep
             elif tp == 'INI':
                 orig, dest = "Stock Inicial (Virt.)", dep
-            elif tp == 'CMV':
-                orig, dest = dep, "Cliente (Venta)"
+            # NOTA COMERCIAL: Se omite por completo 'CMV' (Venta) para retener el stock
+            # en el depósito real final donde físicamente se encuentra guardado.
+            #elif tp == 'CMV':
+            #    orig, dest = dep, "Cliente (Venta)"
             elif tp == 'Baja_PRODUCC':
                 # La materia prima sale del depósito y se introduce en la línea de proceso
                 orig, dest = dep, "Linea Proceso (Virt.)"
@@ -242,11 +251,21 @@ if archivo_cargado is not None:
                 else:
                     # Rueda de auxilio por si hay algún contra-asiento negativo de producción
                     orig, dest = dep, "Linea Proceso (Virt.)"
+            
             elif tp == 'TRANSITO':
-                if kg < 0:
-                    orig, dest = dep, "Mercadería en Tránsito"
+                if kg < 0:  # Evaluamos solo la salida física del camión
+                    orig = dep
+                    # Buscamos la contraparte exacta utilizando el lote limpio
+                    if lote in transito_por_lote:
+                        dest = transito_por_lote[lote]
+                    else:
+                        # Si el camión sigue viajando a fin de mes, cae en el nodo flotante
+                        dest = "Mercadería en Tránsito"
                 else:
-                    orig, dest = "Mercadería en Tránsito", dep
+                    # El ingreso positivo (> 0) se saltea por completo.
+                    # De esta forma evitamos duplicar la flecha y engordar el Sankey artificialmente.
+                    continue
+            
             elif tp in ['Ajuste', 'Ajuste_Evol']:
                 if kg > 0:
                     orig, dest = "Ajustes de Inventario", dep
