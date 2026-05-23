@@ -123,6 +123,12 @@ if archivo_cargado is not None:
         familia_sel = st.sidebar.selectbox("1. Filtrar por Familia:", ["TODAS"] + familias)
         df_f = df_base if familia_sel == "TODAS" else df_base[df_base['FAMILIA'].astype(str) == familia_sel]
         
+        # Extraemos las especies únicas de los datos base
+        especies_disponibles = sorted(df_base['Species'].dropna().unique()) if 'Species' in df_base.columns else []
+        opciones_especie = ["TODAS"] + especies_disponibles
+        especie_seleccionada = st.sidebar.selectbox("🌱 Filtrar por Especie:", opciones_especie)
+        
+        
         # Filtro por Artículo
         articulos = sorted(df_f['NomArticulo'].dropna().astype(str).unique())
         articulo_sel = st.sidebar.selectbox("2. Selecciona el Producto:", articulos)
