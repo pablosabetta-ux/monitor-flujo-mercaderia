@@ -233,11 +233,14 @@ if archivo_cargado is not None:
             elif tp == 'CMV':
                 orig, dest = dep, "Cliente (Venta)"
             elif tp == 'Baja_PRODUCC':
-                orig, dest = dep, "Baja/Merma Proceso"
+                # La materia prima sale del depósito y se introduce en la línea de proceso
+                orig, dest = dep, "Linea Proceso (Virt.)"
             elif tp == 'PRODUCC':
+                # Lo que sale de la industria y vuelve limpio al stock del depósito
                 if kg > 0:
                     orig, dest = "Linea Proceso (Virt.)", dep
                 else:
+                    # Rueda de auxilio por si hay algún contra-asiento negativo de producción
                     orig, dest = dep, "Linea Proceso (Virt.)"
             elif tp == 'TRANSITO':
                 if kg < 0:
