@@ -123,17 +123,43 @@ if archivo_cargado is not None:
         familia_sel = st.sidebar.selectbox("1. Filtrar por Familia:", ["TODAS"] + familias)
         df_f = df_base if familia_sel == "TODAS" else df_base[df_base['FAMILIA'].astype(str) == familia_sel]
         
-        # Extraemos las especies únicas de los datos base
-        especies_disponibles = sorted(df_base['Species'].dropna().unique()) if 'Species' in df_base.columns else []
-        opciones_especie = ["TODAS"] + especies_disponibles
-        especie_seleccionada = st.sidebar.selectbox("🌱 Filtrar por Especie:", opciones_especie)
+        # 2. FILTRO DE ESPECIE (Dependiente de la Familia seleccionada)
+        if 'Species' in df_base.columns:
+            # Si el usuario eligió una familia específica, filtramos el universo de especies
+            if familia_sel != "TODAS" and 'Familia' in df_base.columns:
+                df_especies_filtradas = df_base[df_base['Familia'] == familia_sel]
+            else:
+                # Si eligió "TODAS", mostramos todas las especies del Excel sin restricción
+                df_especies_filtradas = df_base
                 
+            especies_disponibles = sorted(df_especies_filtradas['Species'].dropna().unique())
+            opciones_especie = ["TODAS"] + especies_disponibles
+            especie_seleccionada = st.sidebar.selectbox("🌱 Filtrar por Especie:", opciones_especie)
+        else:
+            especie_seleccionada = "TODAS"
+
+        # 3. FILTRO DE PRODUCTO / ARTÍCULO (Dependiente de Familia y Especie)
+        # De esta forma el artículo también queda filtrado por lo que elegiste arriba
+        df_productos_filtrados = df_base.copy()
+        
+        if familia_sel != "TODAS" and 'Familia' in df_productos_filtrados.columns:
+            df_productos_filtrados = df_productos_filtrados[df_productos_filtrados['Familia'] == familia_sel]
+            
+        if especie_seleccionada != "TODAS" and 'Species' in df_productos_filtrados.columns:
+            df_productos_filtrados = df_productos_filtrados[df_productos_filtrados['Species'] == especie_seleccionada]
+            
         # Filtro por Artículo
         articulos = sorted(df_f['NomArticulo'].dropna().astype(str).unique())
         articulo_sel = st.sidebar.selectbox("2. Selecciona el Producto:", articulos)
         
-        df_filtrado = df_f[df_f['NomArticulo'] == articulo_sel].copy()
-        
+        # --- FILTRADO DINÁMICO FINAL DE LOS DATOS ---
+        # Partimos del artículo seleccionado (que ya está condicionado por la cascada)
+        df_filtrado = df_base[df_base['Producto'] == articulo_sel].copy()
+
+        # Validaciones de seguridad por si las columnas no existen en algún archivo viejo
+        if familia_sel != "TODAS" and 'Familia' in df_filtrado.columns:
+            df_filtrado = df_filtrado[df_filtrado['Familia'] == familia_sel]
+            
         if especie_seleccionada != "TODAS" and 'Species' in df_filtrado.columns:
             df_filtrado = df_filtrado[df_filtrado['Species'] == especie_seleccionada]
         
