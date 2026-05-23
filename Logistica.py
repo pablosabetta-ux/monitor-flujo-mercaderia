@@ -325,6 +325,11 @@ if archivo_cargado is not None:
             elif tp == 'INI':
                 orig, dest = "Stock Inicial (Virt.)", dep
             elif tp == 'CMV':
+                # Si el usuario seleccionó "NO" mostrar ventas en el mapa, salteamos la fila por completo
+                # NOTA: Cambiá 'mostrar_ventas' por el nombre de tu variable del botón/checkbox si es diferente
+                if apertura_cliente=="NO":
+                    continue
+                            
                 id_cliente = row['NOMBRE']
                 #id_cliente = str(row['NOMBRE']).strip().upper()
                 
