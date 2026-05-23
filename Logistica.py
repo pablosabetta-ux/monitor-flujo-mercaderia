@@ -422,7 +422,7 @@ if archivo_cargado is not None:
             # Evaluamos la ecuación estándar:
             df_conciliacion['Control (=0)'] = (
                 df_conciliacion['Inicio'] + 
-                df_conciliacion['Compras'] - 
+                df_conciliacion['Compras'] + 
                 df_conciliacion['Ventas'] + 
                 df_conciliacion['Salidas Proceso'] + 
                 df_conciliacion['Ingresos Proceso'] + 
