@@ -290,7 +290,7 @@ if archivo_cargado is not None:
             tp = row['TP']
             dep = row['DEPOSITO'].upper()
             # Limpiamos el lote actual de la fila de la misma manera exacta
-            lote_actual = str(row['NroLote']).strip().str.upper()
+            lote_actual = row['NroLote'].upper()
 
             if tp in ["SIN_TP", "FIN", "INI"] or dep in ["#N/A", "N/A", "NAN"]:
             #if tp in ["SIN_TP", "FIN"] or dep in ["#N/A", "N/A", "NAN"]:
