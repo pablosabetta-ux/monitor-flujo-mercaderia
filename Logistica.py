@@ -274,14 +274,23 @@ if archivo_cargado is not None:
         orig_dest_mapa = []
         volumen_por_localidad = {}
 
-        # --- NUEVA LÓGICA DE TRÁNSITO INTELIGENTE ---
-        # Buscamos dónde sumó cada lote en los movimientos de TRANSITO
-        ingresos_transito = df_filtrado[(df_filtrado['TP'] == 'TRANSITO') & (df_filtrado['Kilos'] > 0)]
-        destino_por_lote = dict(zip(ingresos_transito['NroLote'], ingresos_transito['DEPOSITO']))
+        # ==================================================================
+        # 1. PREPARACIÓN ULTRA-ESTRICTA DE TRÁNSITOS (LOTE COMPLETO)
+        # ==================================================================
+        # # Filtramos los ingresos de tránsito y limpiamos los textos de los lotes
+        ingresos_t = df_filtrado[(df_filtrado['TP'] == 'TRANSITO') & (df_filtrado['Kilos'] > 0)].copy()
+        
+        # Pasamos a mayúsculas y quitamos espacios fantasmas para asegurar el cruce
+        ingresos_t['Lote_Clean'] = ingresos_t['NroLote'].astype(str).str.strip().str.upper()
+        
+        # Creamos el diccionario de parejas: Clave = Lote Limpio -> Valor = Depósito Destino
+        transito_por_lote = dict(zip(ingresos_t['Lote_Clean'], ingresos_t['DEPOSITO']))
 
         for idx, row in df_filtrado.iterrows():
             tp = row['TP']
             dep = row['DEPOSITO'].upper()
+            # Limpiamos el lote actual de la fila de la misma manera exacta
+            lote_actual = str(row['NroLote']).strip().str.upper()
 
             if tp in ["SIN_TP", "FIN", "INI"] or dep in ["#N/A", "N/A", "NAN"]:
             #if tp in ["SIN_TP", "FIN"] or dep in ["#N/A", "N/A", "NAN"]:
@@ -316,18 +325,16 @@ if archivo_cargado is not None:
                 orig, dest = ("LINEA PROCESO (VIRT.)", dep) if kg > 0 else (dep, "LINEA PROCESO (VIRT.)")
             
             elif tp == 'TRANSITO':
-                # Solo procesamos la fila negativa (la salida) para no duplicar el viaje
-                if kg < 0:
-                    orig = dep  # El depósito de donde sale el camión
-                    
-                    # Buscamos de forma inteligente el depósito de destino usando el lote
-                    if lote in destino_por_lote:
-                        dest = destino_por_lote[lote]  # El depósito real donde ingresó
+                if kg < 0:  # Evaluamos solo el camión que sale cargado del depósito
+                    orig = dep
+                    # Buscamos su contraparte exacta en base al lote limpio
+                    if lote_actual in transito_por_lote:
+                        dest = transito_por_lote[lote_actual]
                     else:
-                        dest = "Mercadería en Tránsito"  # Rueda de auxilio virtual si quedó huérfano
+                        # Rueda de auxilio si el camión sigue en viaje y no se recibió en el destino
+                        dest = "Mercadería en Tránsito"
                 else:
-                    # Si los kilos son positivos (> 0), ignoramos la fila porque ya la dibujamos con la salida
-                    continue            
+                    continue  # El ingreso positivo se ignora para evitar duplicar el trazo en el mapa            
             
             elif tp in ['Ajuste', 'Ajuste_Evol']: 
                 orig, dest = ("AJUSTES DE INVENTARIO", dep) if kg > 0 else (dep, "AJUSTES DE INVENTARIO")
