@@ -278,7 +278,8 @@ if archivo_cargado is not None:
             tp = row['TP']
             dep = row['DEPOSITO'].upper()
 
-            if tp in ["SIN_TP", "FIN", "INI", "TRANSITO"] or dep in ["#N/A", "N/A", "NAN"]:
+            if tp in ["SIN_TP", "FIN", "INI"] or dep in ["#N/A", "N/A", "NAN"]:
+            #if tp in ["SIN_TP", "FIN", "INI", "TRANSITO"] or dep in ["#N/A", "N/A", "NAN"]:
             #if tp in ["SIN_TP", "FIN"] or dep in ["#N/A", "N/A", "NAN"]:
                 continue            
         
