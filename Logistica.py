@@ -424,7 +424,7 @@ if archivo_cargado is not None:
                 df_conciliacion['Salidas Proceso'] + 
                 df_conciliacion['Ingresos Proceso'] + 
                 df_conciliacion['Tránsito'] + 
-                df_conciliacion['Ajustes'] - 
+                df_conciliacion['Ajustes'] + 
                 df_conciliacion['Fin']
             )
 
