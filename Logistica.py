@@ -408,11 +408,25 @@ if archivo_cargado is not None:
             # FIN (Stock Final Teórico o Real de la pestaña)
             df_conciliacion['Fin'] = df_pivot['FIN']
 
-            # 5. Si no usás la columna FIN del Excel y querés calcular la ecuación matemática pura por código:
-            # df_conciliacion['Fin'] = (df_conciliacion['Inicio'] + df_conciliacion['Compras'] - 
-            #                           df_conciliacion['Ventas'] - df_conciliacion['Salidas Proceso'] + 
-            #                           df_conciliacion['Ingresos Proceso'] + df_conciliacion['Tránsito'] + 
-            #                           df_conciliacion['Ajustes'])
+            # 5. AGREGAMOS LA FILA DE TOTALES GENERALES (Abajo del todo)
+            # Calculamos la suma de cada columna numérica antes de meter la de control
+            totales = df_conciliacion.sum(numeric_only=True)
+            df_conciliacion.loc['TOTAL GENERAL'] = totales
+
+            # 6. AGREGAMOS LA COLUMNA DE CONTROL (Al final de la fila)
+            # Ecuación: Inicio + Compras - Ventas - Salidas Proceso + Ingresos Proceso + Tránsito + Ajustes - Fin
+            # Nota: Si en tu Excel las Ventas (CMV) ya vienen con signo negativo, acá las sumamos en lugar de restar.
+            # Evaluamos la ecuación estándar:
+            df_conciliacion['Control (=0)'] = (
+                df_conciliacion['Inicio'] + 
+                df_conciliacion['Compras'] - 
+                df_conciliacion['Ventas'] - 
+                df_conciliacion['Salidas Proceso'] + 
+                df_conciliacion['Ingresos Proceso'] + 
+                df_conciliacion['Tránsito'] + 
+                df_conciliacion['Ajustes'] - 
+                df_conciliacion['Fin']
+            )
 
             # 6. Ordenamos por stock Final de mayor a menor y reseteamos el índice para que el depósito sea columna
             df_conciliacion = df_conciliacion.sort_values(by='Fin', ascending=False).reset_index()
