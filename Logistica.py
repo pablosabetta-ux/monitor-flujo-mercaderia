@@ -127,12 +127,16 @@ if archivo_cargado is not None:
         especies_disponibles = sorted(df_base['Species'].dropna().unique()) if 'Species' in df_base.columns else []
         opciones_especie = ["TODAS"] + especies_disponibles
         especie_seleccionada = st.sidebar.selectbox("🌱 Filtrar por Especie:", opciones_especie)
-        
-        
+                
         # Filtro por Artículo
         articulos = sorted(df_f['NomArticulo'].dropna().astype(str).unique())
         articulo_sel = st.sidebar.selectbox("2. Selecciona el Producto:", articulos)
+        
         df_filtrado = df_f[df_f['NomArticulo'] == articulo_sel].copy()
+        
+        if especie_seleccionada != "TODAS" and 'Species' in df_filtrado.columns:
+            df_filtrado = df_filtrado[df_filtrado['Species'] == especie_seleccionada]
+        
         df_filtrado['Kilos'] = df_filtrado['Cantidad'].abs()
         df_articulo = df_filtrado.copy()
 
