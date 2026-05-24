@@ -171,7 +171,12 @@ if archivo_cargado is not None:
         # ----------------------- LÓGICA DE CONTROL DEL TIEMPO (REPRODUCTOR) ---
         st.sidebar.markdown("---")
         st.sidebar.header("⏱️ Control del Tiempo")
-        meses_disponibles = sorted(df_articulo['MES'].dropna().unique())
+
+        # Tomamos los meses disponibles desde el DataFrame filtrado por artículo (no desde la lista de nombres)
+        if 'MES' in df_filtrado.columns:
+            meses_disponibles = sorted(df_filtrado['MES'].dropna().unique())
+        else:
+            meses_disponibles = []
 
         if len(meses_disponibles) > 0:
             # Inicializamos en el último índice (el final de la lista)
@@ -206,9 +211,8 @@ if archivo_cargado is not None:
 
             # Sincronizamos el estado si el usuario mueve el slider manualmente
             st.session_state.mes_index = meses_disponibles.index(mes_seleccionado)
-            df_filtrado = df_articulo[df_articulo['MES'] <= mes_seleccionado].copy()
+            df_filtrado = df_filtrado[df_filtrado['MES'] <= mes_seleccionado].copy()
         else:
-            df_filtrado = df_articulo
             st.warning("No se encontraron datos en la columna MES para este artículo.")
 
     
