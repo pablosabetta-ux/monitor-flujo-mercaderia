@@ -93,7 +93,6 @@ if archivo_cargado is not None:
                 "0":              {"lat": -33.8923, "lon": -60.5735}
             }
 
-
             # Combinamos lo del Excel con los virtuales (el Excel tiene prioridad si se repite nombre)
             COORDENADAS_FINAL = {**nodos_virtuales, **coordenadas_dict}
 
@@ -121,50 +120,47 @@ if archivo_cargado is not None:
         # Filtro por Familia primero, para acotar
         familias = sorted(df_base['FAMILIA'].dropna().astype(str).unique())
         familia_sel = st.sidebar.selectbox("1. Filtrar por Familia:", ["TODAS"] + familias)
-        df_f = df_base if familia_sel == "TODAS" else df_base[df_base['FAMILIA'].astype(str) == familia_sel]
         
-        # 2. FILTRO DE ESPECIE (Dependiente de la Familia seleccionada)
-        if 'Species' in df_base.columns:
-            # Si el usuario eligió una familia específica, filtramos el universo de especies
-            if familia_sel != "TODAS" and 'Familia' in df_base.columns:
-                df_especies_filtradas = df_base[df_base['Familia'] == familia_sel]
-            else:
-                # Si eligió "TODAS", mostramos todas las especies del Excel sin restricción
-                df_especies_filtradas = df_base
-                
-            especies_disponibles = sorted(df_especies_filtradas['Species'].dropna().unique())
-            opciones_especie = ["TODAS"] + especies_disponibles
-            especie_seleccionada = st.sidebar.selectbox("🌱 Filtrar por Especie:", opciones_especie)
+        if familia_sel != "TODAS":
+                df_especies_filtradas = df_base[df_base['FAMILIA'] == familia_sel]
         else:
-            especie_seleccionada = "TODAS"
-
-        # 3. FILTRO DE PRODUCTO / ARTÍCULO (Dependiente de Familia y Especie)
-        # De esta forma el artículo también queda filtrado por lo que elegiste arriba
-        df_productos_filtrados = df_base.copy()
+                df_especies_filtradas = df_base
         
-        if familia_sel != "TODAS" and 'Familia' in df_productos_filtrados.columns:
-            df_productos_filtrados = df_productos_filtrados[df_productos_filtrados['Familia'] == familia_sel]
+        especies_disponibles = sorted(df_especies_filtradas['Species'].dropna().unique())
+        opciones_especie = ["TODAS"] + especies_disponibles
+        especie_seleccionada = st.sidebar.selectbox("🌱 Filtrar por Especie:", opciones_especie)
+    
+        # Nivel 3: Selección de Artículo / Producto (Filtrado en cascada por los anteriores)
+        df_articulos_filtrados = df_especies_filtradas.copy()
+        if especie_seleccionada != "TODAS":
+            df_articulos_filtrados = df_articulos_filtrados[df_articulos_filtrados['Species'] == especie_seleccionada]
             
-        if especie_seleccionada != "TODAS" and 'Species' in df_productos_filtrados.columns:
-            df_productos_filtrados = df_productos_filtrados[df_productos_filtrados['Species'] == especie_seleccionada]
-            
-        # Filtro por Artículo
-        articulos = sorted(df_f['NomArticulo'].dropna().astype(str).unique())
-        articulo_sel = st.sidebar.selectbox("2. Selecciona el Producto:", articulos)
-        
-        # --- FILTRADO DINÁMICO FINAL DE LOS DATOS ---
-        # Partimos del artículo seleccionado (que ya está condicionado por la cascada)
-        df_filtrado = df_base[df_base['Producto'] == articulo_sel].copy()
+        productos_disponibles = sorted(df_articulos_filtrados['NomArticulo'].dropna().unique())
+        producto_seleccionado = st.sidebar.selectbox("📦 Seleccionar Artículo:", productos_disponibles)        
 
-        # Validaciones de seguridad por si las columnas no existen en algún archivo viejo
-        if familia_sel != "TODAS" and 'Familia' in df_filtrado.columns:
-            df_filtrado = df_filtrado[df_filtrado['Familia'] == familia_sel]
-            
-        if especie_seleccionada != "TODAS" and 'Species' in df_filtrado.columns:
+        # --- FILTRADO DINÁMICO BASE DE DATOS ---
+        df_filtrado = df_base[df_base['NomArticulo'] == producto_seleccionado].copy()
+        if familia_sel != "TODAS":
+            df_filtrado = df_filtrado[df_filtrado['FAMILIA'] == familia_sel]
+        if especie_seleccionada != "TODAS":
             df_filtrado = df_filtrado[df_filtrado['Species'] == especie_seleccionada]
+
+        # Selector de Rango de Fechas basado en lo filtrado
+        fecha_min = df_filtrado['Fecha'].min().date()
+        fecha_max = df_filtrado['Fecha'].max().date()
         
-        df_filtrado['Kilos'] = df_filtrado['Cantidad'].abs()
-        df_articulo = df_filtrado.copy()
+        fechas = st.sidebar.date_input(
+            "Rango de fechas:",
+            value=[fecha_min, fecha_max],
+            min_value=fecha_min,
+            max_value=fecha_max
+        )
+
+        if len(fechas) == 2:
+            df_filtrado = df_filtrado[
+                (df_filtrado['Fecha'].dt.date >= fechas[0]) & 
+                (df_filtrado['Fecha'].dt.date <= fechas[1])
+            ]
 
         # COMANDO: Control de apertura geográfica solicitado
         st.sidebar.markdown("---")
@@ -215,25 +211,7 @@ if archivo_cargado is not None:
             df_filtrado = df_articulo
             st.warning("No se encontraron datos en la columna MES para este artículo.")
 
-        # --- CORRECCIÓN CRÍTICA: EXTRAER Y MOSTRAR STOCK INICIAL ESTÁTICO ---
-        #st.subheader("📋 Foto de Inventario Inicial (No es movimiento)")
-        
-        # Filtramos los registros que sean INI en todo el historial cargado para este artículo
-        #df_ini = df_articulo[df_articulo['TP'] == 'INI']
-        
-        #if not df_ini.empty:
-            # Agrupamos por depósito para saber cuánto había en cada lugar al inicio de todo
-        #    stock_inicial_por_dep = df_ini.groupby('DEPOSITO')['Cantidad'].sum()
-            
-            # Dibujamos tarjetas métricas lindas en columnas horizontales
-        #   cols_metricas = st.columns(len(stock_inicial_por_dep))
-        #    for idx, (deposito_nombre, kilos_iniciales) in enumerate(stock_inicial_por_dep.items()):
-        #        with cols_metricas[idx]:
-        #            st.metric(label=f"STK Inicial en {deposito_nombre}", value=f"{kilos_iniciales:,.0f} Kg")
-        #else:
-        #    st.info("No se registraron registros de Stock Inicial (INI) para este producto.")
-        #st.markdown("---")
-
+    
         # ==================================================================
         # LÓGICA 1: PREPARACIÓN EXCLUSIVA PARA EL SANKEY Y EL MAPA DE FLUJO
         # ==================================================================
