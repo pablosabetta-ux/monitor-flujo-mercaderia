@@ -23,6 +23,9 @@ if archivo_cargado is not None:
             df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
             # 3. Forzar Cantidad a Número Puro
             df['Cantidad'] = pd.to_numeric(df['Cantidad'], errors='coerce').fillna(0)
+            # Normalizar columna de kilos: algunos archivos usan 'Kilos' en lugar de 'Cantidad'
+            if 'Kilos' not in df.columns:
+                df['Kilos'] = df['Cantidad']
             # 4. BLINDAJE CRÍTICO: Forzar Lote a Texto Puro (así evitamos el error de comparación)
             # Primero cambiamos los vacíos por la palabra "SIN_LOTE"
             df['NroLote'] = df['NroLote'].fillna("SIN_LOTE")
