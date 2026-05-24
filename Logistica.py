@@ -148,10 +148,14 @@ if archivo_cargado is not None:
         if especie_seleccionada != "TODAS":
             df_filtrado = df_filtrado[df_filtrado['Species'] == especie_seleccionada]
 
+        # --- FILTROS DE TIEMPO UNIFICADOS ---
+        st.sidebar.markdown("---")
+        st.sidebar.header("⏱️ Rango de tiempo y mes")
+
         # Selector de Rango de Fechas basado en lo filtrado
         fecha_min = df_filtrado['Fecha'].min().date()
         fecha_max = df_filtrado['Fecha'].max().date()
-        
+
         fechas = st.sidebar.date_input(
             "Rango de fechas:",
             value=[fecha_min, fecha_max],
@@ -165,38 +169,23 @@ if archivo_cargado is not None:
                 (df_filtrado['Fecha'].dt.date <= fechas[1])
             ]
 
-        # COMANDO: Control de apertura geográfica solicitado
-        st.sidebar.markdown("---")
-        st.sidebar.header("⚙️ Configuración del Mapa")
-        apertura_cliente_sel = st.sidebar.radio("Apertura Cliente:", ["NO", "SI"], index=0, help="Determina si el mapa proyecta los clientes individualmente o consolidados.")
-        apertura_cliente = (apertura_cliente_sel == "SI")        
-
-        # ----------------------- LÓGICA DE CONTROL DEL TIEMPO (REPRODUCTOR) ---
-        st.sidebar.markdown("---")
-        st.sidebar.header("⏱️ Control del Tiempo")
-
-        # Tomamos los meses disponibles desde el DataFrame filtrado por artículo (no desde la lista de nombres)
+        # Control de tiempo adicional por MES para acumulados hasta el mes seleccionado
         if 'MES' in df_filtrado.columns:
             meses_disponibles = sorted(df_filtrado['MES'].dropna().unique())
         else:
             meses_disponibles = []
 
         if len(meses_disponibles) > 0:
-            # Inicializamos en el último índice (el final de la lista)
             ultimo_indice = len(meses_disponibles) - 1
 
-            # Inicializamos una variable de estado en Streamlit para controlar el reproductor
             if "mes_index" not in st.session_state:
                 st.session_state.mes_index = ultimo_indice
 
-            # Protección extra: si cambiás de artículo y tiene menos meses que el anterior,
-            # forzamos el índice a reajustarse al nuevo final para evitar desbordamientos.
             if st.session_state.mes_index >= len(meses_disponibles) or st.session_state.get('ultimo_articulo_visto') != articulo_sel:
                 st.session_state.mes_index = ultimo_indice
                 st.session_state.ultimo_articulo_visto = articulo_sel
-            
+
             boton_play = st.sidebar.button("▶️ Reproducir Evolución")
-            
             if boton_play:
                 for i in range(len(meses_disponibles)):
                     st.session_state.mes_index = i
@@ -204,7 +193,6 @@ if archivo_cargado is not None:
                     if i < ultimo_indice:
                         st.rerun()
 
-            # El control deslizante ahora toma por defecto la posición actual guardada (que arranca al final)
             mes_seleccionado = st.sidebar.select_slider(
                 "Hasta el mes:", 
                 options=meses_disponibles,
@@ -212,11 +200,16 @@ if archivo_cargado is not None:
                 key="slider_tiempo"
             )
 
-            # Sincronizamos el estado si el usuario mueve el slider manualmente
             st.session_state.mes_index = meses_disponibles.index(mes_seleccionado)
             df_filtrado = df_filtrado[df_filtrado['MES'] <= mes_seleccionado].copy()
         else:
-            st.warning("No se encontraron datos en la columna MES para este artículo.")
+            st.sidebar.info("El filtro por mes no está disponible porque no existe la columna MES en los datos seleccionados.")
+
+        # COMANDO: Control de apertura geográfica solicitado
+        st.sidebar.markdown("---")
+        st.sidebar.header("⚙️ Configuración del Mapa")
+        apertura_cliente_sel = st.sidebar.radio("Apertura Cliente:", ["NO", "SI"], index=0, help="Determina si el mapa proyecta los clientes individualmente o consolidados.")
+        apertura_cliente = (apertura_cliente_sel == "SI")
 
     
         # ==================================================================
