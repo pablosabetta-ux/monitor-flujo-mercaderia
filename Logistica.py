@@ -135,11 +135,11 @@ if archivo_cargado is not None:
         if especie_seleccionada != "TODAS":
             df_articulos_filtrados = df_articulos_filtrados[df_articulos_filtrados['Species'] == especie_seleccionada]
             
-        productos_disponibles = sorted(df_articulos_filtrados['NomArticulo'].dropna().unique())
-        producto_seleccionado = st.sidebar.selectbox("📦 Seleccionar Artículo:", productos_disponibles)        
+        df_articulo = sorted(df_articulos_filtrados['NomArticulo'].dropna().unique())
+        articulo_sel = st.sidebar.selectbox("📦 Seleccionar Artículo:", df_articulo)        
 
         # --- FILTRADO DINÁMICO BASE DE DATOS ---
-        df_filtrado = df_base[df_base['NomArticulo'] == producto_seleccionado].copy()
+        df_filtrado = df_base[df_base['NomArticulo'] == articulo_sel].copy()
         if familia_sel != "TODAS":
             df_filtrado = df_filtrado[df_filtrado['FAMILIA'] == familia_sel]
         if especie_seleccionada != "TODAS":
