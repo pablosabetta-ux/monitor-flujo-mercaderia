@@ -919,11 +919,11 @@ if archivo_cargado is not None:
                     
                     # Dataframe interactivo con selección de fila única
                     seleccion = st.dataframe(
-                        ineficiencias_tabla.style.format({"Kilos Acumulados Total": "{:,.0f}"}),
-                        use_container_width=True, hide_index=True,
-                        selection_mode="single_row", on_select="rerun"
+                            ineficiencias_tabla.style.format({"Kilos Acumulados Total": "{:,.0f}"}),
+                            use_container_width=True, hide_index=True,
+                            selection_mode="single_row", on_select="rerun"
                     )
-                    
+                                        
                     filas_seleccionadas = seleccion.get("selection", {}).get("rows", [])
                     
                     if filas_seleccionadas:
