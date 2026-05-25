@@ -9,8 +9,8 @@ def generar_mapa_limpio(df_flujo_mapa, coordenadas_dict):
     fig = go.Figure()
     
     # Agrupamos por Tipo de Movimiento para crear capas independientes en la leyenda
-    for tipo_mov in df_flujo_mapa['Tipo_Movimiento'].unique():
-        df_tipo = df_flujo_mapa[df_flujo_mapa['Tipo_Movimiento'] == tipo_mov]
+    for tipo_mov in df_flujo_mapa['TP'].unique():
+        df_tipo = df_flujo_mapa[df_flujo_mapa['TP'] == tipo_mov]
         
         lats_lineas = []
         lons_lineas = []
