@@ -253,7 +253,7 @@ if archivo_cargado is not None:
                 orig, dest = "Stock Inicial (Virt.)", dep
             # NOTA COMERCIAL: Se omite por completo 'CMV' (Venta) para retener el stock
             # en el depósito real final donde físicamente se encuentra guardado.
-            #elif tp == 'CMV':
+            elif tp == 'CMV':
             #    orig, dest = dep, "Cliente (Venta)"
             elif tp == 'Baja_PRODUCC':
                 # La materia prima sale del depósito y se introduce en la línea de proceso
