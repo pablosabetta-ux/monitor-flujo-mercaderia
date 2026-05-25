@@ -96,7 +96,6 @@ def generar_mapa_limpio(df_flujo_mapa, coordenadas_dict):
     )
     return fig
 
-
 # Configuración de la página de Streamlit
 st.set_page_config(layout="wide", page_title="Análisis de Ineficiencias Logísticas")
 st.title("📊 Monitor de Flujos, Ineficiencias y Cuellos de Botella")
@@ -792,6 +791,21 @@ if archivo_cargado is not None:
                 st.subheader("Mapa de Rutas Activas")
                 st.plotly_chart(fig_mapa, use_container_width=True)
             
+                st.markdown("##### Resumen de Tramos Geográficos")
+                df_tabla_geo = df_mapa_consolidado.copy()
+                st.dataframe(
+                    df_tabla_geo.sort_values(by='Kilos', ascending=False),
+                    hide_index=True,
+                    use_container_width=True,
+                    height=580,
+                    column_config={
+                        "Kilos": st.column_config.NumberColumn(
+                            "Kilos",
+                            format="%d"  # Muestra los separadores de miles estándar del navegador
+                        )
+                    }
+                )
+
             else:
                 # ==================================================================
                 # NUEVA LÓGICA: MAPA TRIDIMENSIONAL (Torres de Kilos)
@@ -800,21 +814,6 @@ if archivo_cargado is not None:
                 generar_mapa_limpio(df_flujo_mapa, COORDENADAS)
                 
 
-            st.markdown("##### Resumen de Tramos Geográficos")
-            df_tabla_geo = df_mapa_consolidado.copy()
-            #df_tabla_geo['Kilos'] = df_tabla_geo['Kilos'].map('{:,.0f}'.format)
-            st.dataframe(
-                df_tabla_geo.sort_values(by='Kilos', ascending=False),
-                hide_index=True,
-                use_container_width=True,
-                height=580,
-                column_config={
-                    "Kilos": st.column_config.NumberColumn(
-                        "Kilos",
-                        format="%d"  # Muestra los separadores de miles estándar del navegador
-                    )
-                }
-            )
 
     except Exception as e:
         st.error(f"Error procesando el archivo: {e}")
