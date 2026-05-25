@@ -806,7 +806,7 @@ if archivo_cargado is not None:
                     
                 fig.update_layout(
                     geo = dict(
-    scope = 'south america',
+                        scope = 'south america',
                         resolution = 50,
                         showframe = False,
                         showcoastlines = True,
@@ -817,7 +817,9 @@ if archivo_cargado is not None:
                         showsubunits = True if not geojson_provincias else False, # Solo mostramos límites si no tenemos el GeoJSON para dibujarlos
                         subunitcolor = '#1e7e34', # Color de contorno provincial nativo para el Plan B
                         subunitwidth = 3,         # Grosor de la línea del límite interprovincial
-                        bgcolor = '#000000'         # Fondo general del recuadro negro
+                        bgcolor = '#000000',         # Fondo general del recuadro negro
+                        center = dict(lat=-34.5, lon=-60.5), # Centrado automático en la zona núcleo argentina
+                        projection_scale = 6
                     ),
                     margin = dict(l=0, r=0, t=30, b=0),
                     height = 600
