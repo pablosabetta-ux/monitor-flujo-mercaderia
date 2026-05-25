@@ -930,23 +930,49 @@ if archivo_cargado is not None:
                     # Formateo visual de la tabla gerencial
                     ineficiencias_tabla = ineficiencias.copy()
                     ineficiencias_tabla.columns = ['Punto de Origen', 'Punto / Destino Logístico', 'Ventana Temporal', 'Tipo de Flujo', 'Kilos Acumulados Total', 'Variedad Semillas', 'Cantidad Despachos Cortos']
+
+                    seleccion = st.dataframe(
+                            ineficiencias_tabla.style.format({"Kilos Acumulados Total": "{:,.0f}"}),
+                            use_container_width=True, 
+                            hide_index=True,
+                            selection_mode="single_row", # Habilita la selección de una única fila por vez
+                            on_select="rerun"            # Fuerza a Streamlit a refrescarse al hacer clic
+                        )                    
+
+                # --- LÓGICA DE APERTURA DE DETALLES ---
+                    # Chequeamos si el usuario hizo clic en alguna fila
+                    filas_seleccionadas = seleccion.get("selection", {}).get("rows", [])
                     
-                    st.dataframe(
-                        ineficiencias_tabla.style.format({"Kilos Acumulados Total": "{:,.0f}"}),
-                        use_container_width=True, 
-                        hide_index=True
-                    )
-                    
-                    # Gráfico de barras interactivo
-                    fig_viajes = go.Figure([go.Bar(
-                        x="De: " + ineficiencias['Origen_Real'] + "<br>A: " + ineficiencias['Destino_Real'],
-                        y=ineficiencias['Despachos_Fragmentados'],
-                        marker_color='#e74c3c',
-                        text=ineficiencias['Kilos_Totales'].apply(lambda x: f"{x:,.0f} Kg"),
-                        textposition='auto'
-                    )])
-                    fig_viajes.update_layout(title="Rutas Críticas con Mayor Fragmentación de Carga", yaxis_title="Cantidad de Despachos Parciales")
-                    st.plotly_chart(fig_viajes, use_container_width=True)
+                    if filas_seleccionadas:
+                        # Obtenemos el índice de la fila elegida
+                        indice_fila = filas_seleccionadas[0]
+                        fila_activa = ineficiencias.iloc[indice_fila]
+                        
+                        st.markdown("---")
+                        st.subheader(f"🔍 Detalle de Viajes Consolidables para el Tramo:")
+                        st.info(f"📍 **Origen:** {fila_activa['Origen_Real']} ➡️ **Destino:** {fila_activa['Destino_Real']} | **Ventana:** {fila_activa['Periodo_Viaje']}")
+                        
+                        # Filtramos el universo de viajes chicos para quedarnos SOLO con los que armaron este resumen
+                        df_detalle_viajes = df_viajes_filtrados[
+                            (df_viajes_filtrados['Origen_Real'] == fila_activa['Origen_Real']) &
+                            (df_viajes_filtrados['Destino_Real'] == fila_activa['Destino_Real']) &
+                            (df_viajes_filtrados['Periodo_Viaje'] == fila_activa['Periodo_Viaje']) &
+                            (df_viajes_filtrados['TP'] == fila_activa['TP'])
+                        ].copy()
+                        
+                        # Formateamos las columnas para que se vea impecable a nivel corporativo
+                        df_detalle_viajes['Fecha'] = df_detalle_viajes['Fecha'].dt.strftime('%Y-%m-%d')
+                        df_detalle_viajes_tabla = df_detalle_viajes[['Fecha', 'Lote', 'Articulo', 'Kilos', 'TP']].sort_values(by='Fecha')
+                        df_detalle_viajes_tabla.columns = ['📅 Fecha Despacho', '🆔 Nro Lote', '🌱 Producto / Variedad', '⚖️ Kilos Transportados', '⚙️ Tipo Movimiento']
+                        
+                        st.dataframe(
+                            df_detalle_viajes_tabla.style.format({"⚖️ Kilos Transportados": "{:,.0f}"}),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    else:
+                        st.info("💡 Hacé clic en cualquier fila de la tabla de arriba para abrir los camiones parciales asociados.")    
+            
 
         # ------------------------------------------------------------------
         # PANTALLA 3: ANÁLISIS DE HUBS (Ubicación de depósitos)
