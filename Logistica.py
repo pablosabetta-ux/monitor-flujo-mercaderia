@@ -763,8 +763,8 @@ if archivo_cargado is not None:
                             textos_hover.append(f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}")
 
                     # Definición de colores estratégicos por tipo de flujo
-                    color_linea = "#3498db" if tipo_mov == "TRANSITO" else "#f1c40f"
-                    if tipo_mov == "CMV": color_linea = "#e67e22" # Naranja para ventas comerciales
+                    color_linea = "#1707f0" if tipo_mov == "TRANSITO" else "#a4e905"
+                    if tipo_mov == "CMV": color_linea = "#e4130c" # Naranja para ventas comerciales
                     
                     # Agregamos la capa de vectores al mapa
                     fig.add_trace(go.Scattergeo(
