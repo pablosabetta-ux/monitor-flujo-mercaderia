@@ -849,24 +849,20 @@ if archivo_cargado is not None:
         # PANTALLA 2: EFICIENCIA DE VIAJES (Consolidación)
         # ------------------------------------------------------------------
         elif pantalla_activa == "📦 Consolidación de Viajes (Eficiencia)":
-            st.subheader("🏁 Oportunidades de Consolidación de Carga")
-            st.write("Agrupación masiva de salidas por Origen y Destino para detectar despachos fraccionados en ventanas temporales cortas.")
+            st.subheader("🏁 Oportunidades de Consolidación de Carga (Viajes Parciales)")
             st.write("""
-                **Reglas de Eficiencia Aplicadas:**
-                * 🚫 **Filtro de Capacidad:** Se excluyen automáticamente los viajes ya optimizados (mayores a 25.000 Kg).
-                * 🗺️ **Criterio Geográfico:** Se muestra el Origen de carga para evaluar si las plantas están en el mismo corredor logístico antes de consolidar.
-                """)
+            **Instrucciones:** Seleccioná una fila de la tabla resumen para auditar la apertura de camiones chicos.
+            * 🚫 **Filtro de Capacidad:** Se descartan los camiones completos (mayores a 25.000 Kg) ya eficientes.
+            """)
 
             dias_ventana = st.slider("Ventana de días para agrupar viajes cercanos:", min_value=1, max_value=7, value=3)
             
-            # 1. Recuperamos los ingresos por tránsito para calcular los orígenes reales (Igual que en Pantalla 1)
             ingresos_t = df_base[(df_base['TP'] == 'TRANSITO') & (df_base['Cantidad'] > 0)].copy()
             ingresos_t['Lote_Clean'] = ingresos_t['NroLote'].astype(str).str.strip().str.upper()
             transito_por_lote = dict(zip(ingresos_t['Lote_Clean'], ingresos_t['DEPOSITO']))
 
             viajes_parciales = []
 
-            # 2. Barremos el dataframe para reconstruir orígenes/destinos y aplicar el filtro de >25.000 kg
             for idx, row in df_base.iterrows():
                 tp = str(row['TP']).strip()
                 dep = str(row['DEPOSITO']).strip()
@@ -874,12 +870,10 @@ if archivo_cargado is not None:
                 kg_abs = round(abs(kg), 2)
                 lote_actual = str(row['NroLote']).strip().upper()
                 
-                # REGLA DE NEGOCIO 1: Si el viaje individual ya lleva más de 25.000 kg, no es consolidable (Ya es eficiente)
                 if kg_abs > 25000:
-                    continue
-                #El stock en INI no se considera ( 25-5-2026) no es un movimiento real
-
-                if tp in ["SIN_TP", "FIN", "INI"] or dep == "DESCONOCIDO" or lote_actual in ["SIN_LOTE", "NAN"]:
+                    continue # Exclusión de camiones llenos
+                    
+                if tp in ["SIN_TP", "FIN"] or dep == "DESCONOCIDO" or lote_actual in ["SIN_LOTE", "NAN"]:
                     continue
 
                 orig, dest = None, None
@@ -896,55 +890,43 @@ if archivo_cargado is not None:
 
                 if orig and dest:
                     viajes_parciales.append({
-                        'Fecha': row['Fecha'],
-                        'Origen_Real': orig,
-                        'Destino_Real': dest,
-                        'Kilos': kg_abs,
-                        'TP': tp,
-                        'Articulo': row['NomArticulo']
+                        'Fecha': row['Fecha'], 'Origen_Real': orig, 'Destino_Real': dest,
+                        'Kilos': kg_abs, 'TP': tp, 'Articulo': row['NomArticulo'], 'Lote': row['NroLote']
                     })
 
             df_viajes_filtrados = pd.DataFrame(viajes_parciales)
 
             if df_viajes_filtrados.empty:
-                st.info("No se encontraron viajes parciales (menores a 25.000 Kg) en el archivo cargado.")
+                st.info("No se encontraron viajes parciales (menores a 25.000 Kg) en este reporte.")
             else:
-                # Creamos la ventana de días sobre los viajes chicos corregidos
                 df_viajes_filtrados['Periodo_Viaje'] = df_viajes_filtrados['Fecha'].dt.to_period(f'{dias_ventana}D').astype(str)
                 
-                # REGLA DE NEGOCIO 2: Agrupamos por Origen y Destino para evaluar cercanía geográfica de despacho
                 df_consolidado = df_viajes_filtrados.groupby(['Origen_Real', 'Destino_Real', 'Periodo_Viaje', 'TP']).agg(
                     Kilos_Totales=('Kilos', 'sum'),
                     Variedad_Articulos=('Articulo', 'nunique'),
                     Despachos_Fragmentados=('Kilos', 'count')
                 ).reset_index()
                 
-                # Filtramos donde haya ineficiencia real (más de 1 despacho menor a 25 toneladas para el mismo tramo)
-                ineficiencias = df_consolidado[df_consolidado['Despachos_Fragmentados'] > 1].sort_values(by='Despachos_Fragmentados', ascending=False)
+                ineficiencias = df_consolidado[df_consolidado['Despachos_Fragmentados'] > 1].sort_values(by='Despachos_Fragmentados', ascending=False).reset_index(drop=True)
                 
                 if ineficiencias.empty:
-                    st.success("✅ ¡Excelente eficiencia operativa! No se detectaron despachos fraccionados repetidos para los mismos tramos en esa ventana de tiempo.")
+                    st.success("✅ ¡Gran eficiencia! No hay tramos fragmentados repetidos en este período.")
                 else:
-                    st.warning(f"⚠️ Se detectaron {len(ineficiencias)} rutas con envíos fragmentados menores a 25.000 Kg que pudieron unificarse.")
+                    st.warning(f"⚠️ Se detectaron {len(ineficiencias)} rutas con envíos fragmentados menores a 25.000 Kg.")
                     
-                    # Formateo visual de la tabla gerencial
                     ineficiencias_tabla = ineficiencias.copy()
                     ineficiencias_tabla.columns = ['Punto de Origen', 'Punto / Destino Logístico', 'Ventana Temporal', 'Tipo de Flujo', 'Kilos Acumulados Total', 'Variedad Semillas', 'Cantidad Despachos Cortos']
-
+                    
+                    # Dataframe interactivo con selección de fila única
                     seleccion = st.dataframe(
-                            ineficiencias_tabla.style.format({"Kilos Acumulados Total": "{:,.0f}"}),
-                            use_container_width=True, 
-                            hide_index=True,
-                            selection_mode="single_row", # Habilita la selección de una única fila por vez
-                            on_select="rerun"            # Fuerza a Streamlit a refrescarse al hacer clic
-                        )                    
-
-                # --- LÓGICA DE APERTURA DE DETALLES ---
-                    # Chequeamos si el usuario hizo clic en alguna fila
+                        ineficiencias_tabla.style.format({"Kilos Acumulados Total": "{:,.0f}"}),
+                        use_container_width=True, hide_index=True,
+                        selection_mode="single_row", on_select="rerun"
+                    )
+                    
                     filas_seleccionadas = seleccion.get("selection", {}).get("rows", [])
                     
                     if filas_seleccionadas:
-                        # Obtenemos el índice de la fila elegida
                         indice_fila = filas_seleccionadas[0]
                         fila_activa = ineficiencias.iloc[indice_fila]
                         
@@ -952,7 +934,6 @@ if archivo_cargado is not None:
                         st.subheader(f"🔍 Detalle de Viajes Consolidables para el Tramo:")
                         st.info(f"📍 **Origen:** {fila_activa['Origen_Real']} ➡️ **Destino:** {fila_activa['Destino_Real']} | **Ventana:** {fila_activa['Periodo_Viaje']}")
                         
-                        # Filtramos el universo de viajes chicos para quedarnos SOLO con los que armaron este resumen
                         df_detalle_viajes = df_viajes_filtrados[
                             (df_viajes_filtrados['Origen_Real'] == fila_activa['Origen_Real']) &
                             (df_viajes_filtrados['Destino_Real'] == fila_activa['Destino_Real']) &
@@ -960,20 +941,16 @@ if archivo_cargado is not None:
                             (df_viajes_filtrados['TP'] == fila_activa['TP'])
                         ].copy()
                         
-                        # Formateamos las columnas para que se vea impecable a nivel corporativo
                         df_detalle_viajes['Fecha'] = df_detalle_viajes['Fecha'].dt.strftime('%Y-%m-%d')
                         df_detalle_viajes_tabla = df_detalle_viajes[['Fecha', 'Lote', 'Articulo', 'Kilos', 'TP']].sort_values(by='Fecha')
                         df_detalle_viajes_tabla.columns = ['📅 Fecha Despacho', '🆔 Nro Lote', '🌱 Producto / Variedad', '⚖️ Kilos Transportados', '⚙️ Tipo Movimiento']
                         
                         st.dataframe(
                             df_detalle_viajes_tabla.style.format({"⚖️ Kilos Transportados": "{:,.0f}"}),
-                            use_container_width=True,
-                            hide_index=True
+                            use_container_width=True, hide_index=True
                         )
                     else:
-                        st.info("💡 Hacé clic en cualquier fila de la tabla de arriba para abrir los camiones parciales asociados.")    
-            
-
+                        st.info("💡 Hacé clic en la casilla izquierda de cualquier fila para abrir el desglose de los camiones chicos.")
         # ------------------------------------------------------------------
         # PANTALLA 3: ANÁLISIS DE HUBS (Ubicación de depósitos)
         # ------------------------------------------------------------------
