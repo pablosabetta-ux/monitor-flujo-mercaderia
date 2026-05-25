@@ -794,7 +794,7 @@ if archivo_cargado is not None:
 
                 # --- RENDERIZADO EN STREAMLIT ---
                 st.subheader("Mapa de Rutas Activas")
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig_mapa, use_container_width=True)
 
                 st.markdown("##### Resumen de Tramos Geográficos")
                 df_tabla_geo = df_mapa_consolidado.copy()
