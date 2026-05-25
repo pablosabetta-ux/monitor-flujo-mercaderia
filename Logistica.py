@@ -851,43 +851,101 @@ if archivo_cargado is not None:
         elif pantalla_activa == "📦 Consolidación de Viajes (Eficiencia)":
             st.subheader("🏁 Oportunidades de Consolidación de Carga")
             st.write("Agrupación masiva de salidas por Origen y Destino para detectar despachos fraccionados en ventanas temporales cortas.")
+            st.write("""
+                **Reglas de Eficiencia Aplicadas:**
+                * 🚫 **Filtro de Capacidad:** Se excluyen automáticamente los viajes ya optimizados (mayores a 25.000 Kg).
+                * 🗺️ **Criterio Geográfico:** Se muestra el Origen de carga para evaluar si las plantas están en el mismo corredor logístico antes de consolidar.
+                """)
 
             dias_ventana = st.slider("Ventana de días para agrupar viajes cercanos:", min_value=1, max_value=7, value=3)
             
-            # Filtramos movimientos de salida real (Tránsitos negativos o Ventas)
-            df_viajes = df_base[df_base['TP'].isin(['TRANSITO', 'CMV'])].copy()
-            df_viajes['Kilos_Abs'] = df_viajes['Cantidad'].abs()
-            df_viajes['Periodo_Viaje'] = df_viajes['Fecha'].dt.to_period(f'{dias_ventana}D').astype(str)
-            
-            # Como en el Excel la planta o cliente destino es 'DEPOSITO', agrupamos por esa localización y el período
-            df_consolidado = df_viajes.groupby(['DEPOSITO', 'Periodo_Viaje', 'TP']).agg(
-                Kilos_Totales=('Kilos_Abs', 'sum'),
-                Articulos_Distintos=('NomArticulo', 'nunique'),
-                Viajes_Individuales=('NroLote', 'count')
-            ).reset_index()
-            
-            # Filtramos donde haya más de un despacho en la misma ventana para el mismo destino
-            ineficiencias = df_consolidado[df_consolidado['Viajes_Individuales'] > 1].sort_values(by='Viajes_Individuales', ascending=False)
-            
-            if ineficiencias.empty:
-                st.success("✅ ¡Gran eficiencia! No se detectaron viajes duplicados o fraccionados en las mismas ventanas de tiempo.")
+            # 1. Recuperamos los ingresos por tránsito para calcular los orígenes reales (Igual que en Pantalla 1)
+            ingresos_t = df_base[(df_base['TP'] == 'TRANSITO') & (df_base['Cantidad'] > 0)].copy()
+            ingresos_t['Lote_Clean'] = ingresos_t['NroLote'].astype(str).str.strip().str.upper()
+            transito_por_lote = dict(zip(ingresos_t['Lote_Clean'], ingresos_t['DEPOSITO']))
+
+            viajes_parciales = []
+
+            # 2. Barremos el dataframe para reconstruir orígenes/destinos y aplicar el filtro de >25.000 kg
+            for idx, row in df_base.iterrows():
+                tp = str(row['TP']).strip()
+                dep = str(row['DEPOSITO']).strip()
+                kg = float(row['Cantidad'])
+                kg_abs = round(abs(kg), 2)
+                lote_actual = str(row['NroLote']).strip().upper()
+                
+                # REGLA DE NEGOCIO 1: Si el viaje individual ya lleva más de 25.000 kg, no es consolidable (Ya es eficiente)
+                if kg_abs > 25000:
+                    continue
+                    
+                if tp in ["SIN_TP", "FIN"] or dep == "DESCONOCIDO" or lote_actual in ["SIN_LOTE", "NAN"]:
+                    continue
+
+                orig, dest = None, None
+                
+                if tp == 'FOB': orig, dest = "Proveedor Ext.", dep
+                elif tp == 'CPRA': orig, dest = "Proveedor Local", dep
+                elif tp == 'INI': orig, dest = "Stock Inicial (Virt.)", dep
+                elif tp == 'TRANSITO' and kg < 0:
+                    orig = dep
+                    dest = transito_por_lote.get(lote_actual, "Mercadería en Tránsito")
+                elif tp == 'CMV':
+                    orig = dep
+                    dest = "CLIENTE (VENTA)"
+
+                if orig and dest:
+                    viajes_parciales.append({
+                        'Fecha': row['Fecha'],
+                        'Origen_Real': orig,
+                        'Destino_Real': dest,
+                        'Kilos': kg_abs,
+                        'TP': tp,
+                        'Articulo': row['NomArticulo']
+                    })
+
+            df_viajes_filtrados = pd.DataFrame(viajes_parciales)
+
+            if df_viajes_filtrados.empty:
+                st.info("No se encontraron viajes parciales (menores a 25.000 Kg) en el archivo cargado.")
             else:
-                st.warning(f"⚠️ Se detectaron {len(ineficiencias)} destinos con despachos fragmentados en ventanas de {dias_ventana} días que pudieron unificarse.")
+                # Creamos la ventana de días sobre los viajes chicos corregidos
+                df_viajes_filtrados['Periodo_Viaje'] = df_viajes_filtrados['Fecha'].dt.to_period(f'{dias_ventana}D').astype(str)
                 
-                # Renombramos columnas para presentación comercial limpia
-                ineficiencias_tabla = ineficiencias.copy()
-                ineficiencias_tabla.columns = ['Punto / Destino Logístico', 'Ventana Temporal', 'Tipo de Flujo', 'Kilos Acumulados', 'Variedad Artículos', 'Despachos Realizados']
-                st.dataframe(ineficiencias_tabla, use_container_width=True, hide_index=True)
+                # REGLA DE NEGOCIO 2: Agrupamos por Origen y Destino para evaluar cercanía geográfica de despacho
+                df_consolidado = df_viajes_filtrados.groupby(['Origen_Real', 'Destino_Real', 'Periodo_Viaje', 'TP']).agg(
+                    Kilos_Totales=('Kilos', 'sum'),
+                    Variedad_Articulos=('Articulo', 'nunique'),
+                    Despachos_Fragmentados=('Kilos', 'count')
+                ).reset_index()
                 
-                fig_viajes = go.Figure([go.Bar(
-                    x=ineficiencias['DEPOSITO'] + " (" + ineficiencias['TP'] + ")",
-                    y=ineficiencias['Viajes_Individuales'],
-                    marker_color='#e74c3c',
-                    text=ineficiencias['Kilos_Totales'].apply(lambda x: f"{x:,.0f} Kg"),
-                    textposition='auto'
-                )])
-                fig_viajes.update_layout(title="Top Destinos con Mayor Fragmentación de Despachos", yaxis_title="Cantidad de Despachos en el período")
-                st.plotly_chart(fig_viajes, use_container_width=True)
+                # Filtramos donde haya ineficiencia real (más de 1 despacho menor a 25 toneladas para el mismo tramo)
+                ineficiencias = df_consolidado[df_consolidado['Despachos_Fragmentados'] > 1].sort_values(by='Despachos_Fragmentados', ascending=False)
+                
+                if ineficiencias.empty:
+                    st.success("✅ ¡Excelente eficiencia operativa! No se detectaron despachos fraccionados repetidos para los mismos tramos en esa ventana de tiempo.")
+                else:
+                    st.warning(f"⚠️ Se detectaron {len(ineficiencias)} rutas con envíos fragmentados menores a 25.000 Kg que pudieron unificarse.")
+                    
+                    # Formateo visual de la tabla gerencial
+                    ineficiencias_tabla = ineficiencias.copy()
+                    ineficiencias_tabla.columns = ['Punto de Origen', 'Punto / Destino Logístico', 'Ventana Temporal', 'Tipo de Flujo', 'Kilos Acumulados Total', 'Variedad Semillas', 'Cantidad Despachos Cortos']
+                    
+                    st.dataframe(
+                        ineficiencias_tabla.style.format({"Kilos Acumulados Total": "{:,.0f}"}),
+                        use_container_width=True, 
+                        hide_index=True
+                    )
+                    
+                    # Gráfico de barras interactivo
+                    fig_viajes = go.Figure([go.Bar(
+                        x="De: " + ineficiencias['Origen_Real'] + "<br>A: " + ineficiencias['Destino_Real'],
+                        y=ineficiencias['Despachos_Fragmentados'],
+                        marker_color='#e74c3c',
+                        text=ineficiencias['Kilos_Totales'].apply(lambda x: f"{x:,.0f} Kg"),
+                        textposition='auto'
+                    )])
+                    fig_viajes.update_layout(title="Rutas Críticas con Mayor Fragmentación de Carga", yaxis_title="Cantidad de Despachos Parciales")
+                    st.plotly_chart(fig_viajes, use_container_width=True)
 
         # ------------------------------------------------------------------
         # PANTALLA 3: ANÁLISIS DE HUBS (Ubicación de depósitos)
