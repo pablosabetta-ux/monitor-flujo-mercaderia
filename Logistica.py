@@ -877,8 +877,9 @@ if archivo_cargado is not None:
                 # REGLA DE NEGOCIO 1: Si el viaje individual ya lleva más de 25.000 kg, no es consolidable (Ya es eficiente)
                 if kg_abs > 25000:
                     continue
-                    
-                if tp in ["SIN_TP", "FIN"] or dep == "DESCONOCIDO" or lote_actual in ["SIN_LOTE", "NAN"]:
+                #El stock en INI no se considera ( 25-5-2026) no es un movimiento real
+
+                if tp in ["SIN_TP", "FIN", "INI"] or dep == "DESCONOCIDO" or lote_actual in ["SIN_LOTE", "NAN"]:
                     continue
 
                 orig, dest = None, None
