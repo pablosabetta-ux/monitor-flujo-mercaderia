@@ -777,25 +777,32 @@ if archivo_cargado is not None:
                         text = textos_hover
                     ))
 
+                # 2. Burbujas Dinámicas: Solo nodos ACTIVOS en el dataframe filtrado
                 # --- AGREGAR NODOS FIJOS COMO BURBUJAS DE VOLUMEN ---
                 # Dibujamos los puntos de las localidades para identificar los centros de masa
+                nodos_activos = set(pd.concat([df_flujo_mapa['Origen'], df_flujo_mapa['Destino']]).unique())
                 lats_nodos, lons_nodos, nombres_nodos, tamaños_nodos = [], [], [], []
                 
-                for nodo, datos in COORDENADAS.items():
-                    lats_nodos.append(datos['lat'])
-                    lons_nodos.append(datos['lon'])
-                    nombres_nodos.append(datos.get('display_name', nodo))
-                    # El tamaño responde visualmente a la importancia de la localidad
-                    tamaños_nodos.append(12) 
+                for nodo in nodos_activos:
+                    nodo_upper = str(nodo).upper()
+                    if nodo_upper in COORDENADAS:
+                        datos = COORDENADAS[nodo_upper]
+                        lats_nodos.append(datos['lat'])
+                        lons_nodos.append(datos['lon'])
+                        nombres_nodos.append(datos.get('display_name', nodo))
+                        
+                        # El tamaño responde de forma real a los kilos calculados (sin duplicar)
+                        kg_real = volumen_por_localidad.get(nodo_upper, 0)
+                        tamaño_dinamico = max(8, min(25, int(kg_real / 25000))) if kg_real > 0 else 8
+                        tamaños_nodos.append(tamaño_dinamico)
 
-                fig.add_trace(go.Scattergeo(
-                    lon = lons_nodos, lat = lats_nodos,
-                    mode = 'markers',
-                    name = "Puntos Logísticos / Clientes",
-                    marker = dict(size = tamaños_nodos, color = '#2ecc71', line=dict(width=1, color='black')),
-                    text = nombres_nodos,
-                    hoverinfo = 'text'
-                ))
+                if lats_nodos:
+                    fig.add_trace(go.Scattergeo(
+                        lon=lons_nodos, lat=lats_nodos, mode='markers',
+                        name="Puntos Operativos Activos",
+                        marker=dict(size=tamaños_nodos, color='#2ecc71', line=dict(width=1.5, color='black')),
+                        text=nombres_nodos, hoverinfo='text'
+                    ))
 
                 fig.update_layout(
                     geo = dict(
@@ -810,7 +817,6 @@ if archivo_cargado is not None:
                 )
 
                 # --- RENDERIZADO EN STREAMLIT ---
-                st.subheader("Mapa de Rutas Activas")
                 st.plotly_chart(fig, use_container_width=True)
 
 
