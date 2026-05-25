@@ -64,8 +64,9 @@ def generar_mapa_limpio(df_flujo_mapa, coordenadas_dict):
         ))
 
     st.subheader("Mapa de Rutas Activas")
-    st.plotly_chart(fig_mapa, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
+#------------------FIN - DEF MAPA LIMPIO------------------#
 
     # --- AGREGAR NODOS FIJOS COMO BURBUJAS DE VOLUMEN ---
     # Dibujamos los puntos de las localidades para identificar los centros de masa
