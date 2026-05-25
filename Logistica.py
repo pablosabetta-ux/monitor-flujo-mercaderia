@@ -854,33 +854,39 @@ if archivo_cargado is not None:
 
             dias_ventana = st.slider("Ventana de días para agrupar viajes cercanos:", min_value=1, max_value=7, value=3)
             
-            df_viajes = df_base[df_base['TP'].isin(['TRANSITO', 'CMV']) & (df_base['Cantidad'] < 0)].copy()
+            # Filtramos movimientos de salida real (Tránsitos negativos o Ventas)
+            df_viajes = df_base[df_base['TP'].isin(['TRANSITO', 'CMV'])].copy()
             df_viajes['Kilos_Abs'] = df_viajes['Cantidad'].abs()
             df_viajes['Periodo_Viaje'] = df_viajes['Fecha'].dt.to_period(f'{dias_ventana}D').astype(str)
             
-            df_consolidado = df_viajes.groupby(['Origen', 'DEPOSITO', 'Periodo_Viaje']).agg(
+            # Como en el Excel la planta o cliente destino es 'DEPOSITO', agrupamos por esa localización y el período
+            df_consolidado = df_viajes.groupby(['DEPOSITO', 'Periodo_Viaje', 'TP']).agg(
                 Kilos_Totales=('Kilos_Abs', 'sum'),
                 Articulos_Distintos=('NomArticulo', 'nunique'),
                 Viajes_Individuales=('NroLote', 'count')
             ).reset_index()
             
+            # Filtramos donde haya más de un despacho en la misma ventana para el mismo destino
             ineficiencias = df_consolidado[df_consolidado['Viajes_Individuales'] > 1].sort_values(by='Viajes_Individuales', ascending=False)
             
             if ineficiencias.empty:
                 st.success("✅ ¡Gran eficiencia! No se detectaron viajes duplicados o fraccionados en las mismas ventanas de tiempo.")
             else:
-                st.warning(f"⚠️ Se detectaron {len(ineficiencias)} rutas con despachos fragmentados que pudieron viajar juntos.")
-                ineficiencias.columns = ['Origen', 'Destino Final', 'Ventana Temporal', 'Kilos Acumulados', 'Variedad Artículos', 'Despachos Realizados']
-                st.dataframe(ineficiencias, use_container_width=True, hide_index=True)
+                st.warning(f"⚠️ Se detectaron {len(ineficiencias)} destinos con despachos fragmentados en ventanas de {dias_ventana} días que pudieron unificarse.")
+                
+                # Renombramos columnas para presentación comercial limpia
+                ineficiencias_tabla = ineficiencias.copy()
+                ineficiencias_tabla.columns = ['Punto / Destino Logístico', 'Ventana Temporal', 'Tipo de Flujo', 'Kilos Acumulados', 'Variedad Artículos', 'Despachos Realizados']
+                st.dataframe(ineficiencias_tabla, use_container_width=True, hide_index=True)
                 
                 fig_viajes = go.Figure([go.Bar(
-                    x=ineficiencias['Destino Final'] + " (" + ineficiencias['Origen'] + ")",
-                    y=ineficiencias['Despachos Realizados'],
+                    x=ineficiencias['DEPOSITO'] + " (" + ineficiencias['TP'] + ")",
+                    y=ineficiencias['Viajes_Individuales'],
                     marker_color='#e74c3c',
-                    text=ineficiencias['Kilos Acumulados'].apply(lambda x: f"{x:,.0f} Kg"),
+                    text=ineficiencias['Kilos_Totales'].apply(lambda x: f"{x:,.0f} Kg"),
                     textposition='auto'
                 )])
-                fig_viajes.update_layout(title="Top Rutas con Mayor Fragmentación de Viajes", yaxis_title="Cantidad de Despachos")
+                fig_viajes.update_layout(title="Top Destinos con Mayor Fragmentación de Despachos", yaxis_title="Cantidad de Despachos en el período")
                 st.plotly_chart(fig_viajes, use_container_width=True)
 
         # ------------------------------------------------------------------
@@ -890,29 +896,34 @@ if archivo_cargado is not None:
             st.subheader("📍 Análisis de Densidad de Entregas para Apertura de Hubs")
             st.write("Análisis de concentración de Kilos despachados a zonas comerciales para justificar la apertura estratégica de depósitos regionales.")
 
+            # Filtramos los despachos comerciales (CMV)
             df_hubs = df_base[df_base['TP'] == 'CMV'].copy()
             df_hubs['Kilos_Abs'] = df_hubs['Cantidad'].abs()
             
+            # Agrupamos por la columna física 'DEPOSITO' que guarda la sucursal/zona destino de la venta
             analisis_zonas = df_hubs.groupby('DEPOSITO').agg(
                 Kilos_Despachados=('Kilos_Abs', 'sum'),
-                Clientes_Atendidos=('NOMBRE', 'nunique'),
+                Clientes_Atendidos=('NOMBRE', 'nunique') if 'NOMBRE' in df_hubs.columns else ('DEPOSITO', 'count'),
                 Frecuencia_Envios=('Fecha', 'count')
             ).reset_index().sort_values(by='Kilos_Despachados', ascending=False)
             
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                st.write("### 📊 Ranking de Concentración de Demanda comercial")
-                analisis_zonas.columns = ['Zona / Destino Comercial', 'Kilos Totales Recibidos', 'Clientes Únicos', 'Cantidad de Entregas']
-                st.dataframe(analisis_zonas, use_container_width=True, hide_index=True)
-            with col2:
-                st.write("### 🧠 Sugerencia Estratégica")
-                if not analisis_zonas.empty:
+            if analisis_zonas.empty:
+                st.info("No se registran movimientos de venta (CMV) en el archivo actual para analizar zonas de distribución.")
+            else:
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    st.write("### 📊 Ranking de Concentración de Demanda Comercial")
+                    analisis_zonas_tabla = analisis_zonas.copy()
+                    analisis_zonas_tabla.columns = ['Zona / Destino Comercial', 'Kilos Totales Recibidos', 'Clientes Únicos', 'Cantidad de Entregas']
+                    st.dataframe(analisis_zonas_tabla, use_container_width=True, hide_index=True)
+                with col2:
+                    st.write("### 🧠 Sugerencia Estratégica")
                     top_zona = analisis_zonas.iloc[0]
                     st.info(f"""
                     **Zona Crítica Detectada:**
-                    La zona de **{top_zona['Zona / Destino Comercial']}** absorbió un volumen total de **{top_zona['Kilos Totales Recibidos']:,.0f} Kg** distribuidos en **{top_zona['Cantidad de Entregas']} despachos comerciales**. 
+                    La zona de **{top_zona['DEPOSITO']}** absorbió un volumen total de **{top_zona['Kilos_Despachados']:,.0f} Kg** distribuidos en **{top_zona['Frecuencia_Envios']} despachos**. 
                     
-                    💡 *Propuesta Financiera:* Evaluar la contratación de un depósito tercerizado en esta área para consolidar fletes largos y distribuir de manera local.
+                    💡 *Propuesta Financiera:* Evaluar la contratación de un depósito tercerizado en esta área geográfica para consolidar fletes largos desde casa matriz en camiones completos y coordinar la entrega de 'última milla' localmente.
                     """)
 
     except Exception as e:
