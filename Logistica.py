@@ -849,39 +849,42 @@ if archivo_cargado is not None:
         # PANTALLA 2: EFICIENCIA DE VIAJES (Consolidación)
         # ------------------------------------------------------------------
         elif pantalla_activa == "📦 Consolidación de Viajes (Eficiencia)":
-            st.subheader("🏁 Oportunidades de Consolidación de Carga (Viajes Parciales)")
+            st.subheader("🏁 Oportunidades de Consolidación de Carga (Basado en Remitos)")
             st.write("""
-            **Instrucciones:** Seleccioná una fila de la tabla resumen para auditar la apertura de camiones chicos.
-            * 🚫 **Filtro de Capacidad:** Se descartan los camiones completos (mayores a 25.000 Kg) ya eficientes.
+            **Lógica de Auditoría Aplicada:**
+            1. 📑 **Consolidación por Camión:** Se agrupan los renglones del Excel por el campo `NOMBRE` (Nro. Remito) para calcular el peso total real del viaje.
+            2. 🚫 **Filtro de Capacidad:** Se excluyen los Remitos que ya viajan completos (mayores a 25.000 Kg).
+            3. 🔀 **Detección de Ineficiencias:** Se exponen los Remitos parciales que fueron al mismo destino en fechas cercanas para evaluar si compartían el mismo corredor logístico.
             """)
 
             dias_ventana = st.slider("Ventana de días para agrupar viajes cercanos:", min_value=1, max_value=7, value=3)
             
+            # 1. Recuperamos tránsitos de ingreso para mapear orígenes
             ingresos_t = df_base[(df_base['TP'] == 'TRANSITO') & (df_base['Cantidad'] > 0)].copy()
             ingresos_t['Lote_Clean'] = ingresos_t['NroLote'].astype(str).str.strip().str.upper()
             transito_por_lote = dict(zip(ingresos_t['Lote_Clean'], ingresos_t['DEPOSITO']))
 
-            viajes_parciales = []
+            viajes_procesados = []
 
-            for idx, row in df_base.iterrows():
+            # 2. Reconstruimos el sentido lógico de cada renglón de movimiento real
+            df_reales = df_base[df_base['TP'].isin(['TRANSITO', 'CMV'])].copy()
+            
+            for idx, row in df_reales.iterrows():
                 tp = str(row['TP']).strip()
                 dep = str(row['DEPOSITO']).strip()
                 kg = float(row['Cantidad'])
                 kg_abs = round(abs(kg), 2)
                 lote_actual = str(row['NroLote']).strip().upper()
+                remito = str(row['NOMBRE']).strip() # El campo NOMBRE es el Remito Real
                 
-                if kg_abs > 25000:
-                    continue # Exclusión de camiones llenos
+                if tp == 'TRANSITO' and kg > 0:
+                    continue # Omitimos el renglón de entrada del tránsito para no duplicar kilos
                     
-                if tp in ["SIN_TP", "FIN"] or dep == "DESCONOCIDO" or lote_actual in ["SIN_LOTE", "NAN"]:
+                if dep == "DESCONOCIDO" or remito in ["NAN", ""]:
                     continue
 
                 orig, dest = None, None
-                
-                if tp == 'FOB': orig, dest = "Proveedor Ext.", dep
-                elif tp == 'CPRA': orig, dest = "Proveedor Local", dep
-                elif tp == 'INI': orig, dest = "Stock Inicial (Virt.)", dep
-                elif tp == 'TRANSITO' and kg < 0:
+                if tp == 'TRANSITO':
                     orig = dep
                     dest = transito_por_lote.get(lote_actual, "Mercadería en Tránsito")
                 elif tp == 'CMV':
@@ -889,68 +892,99 @@ if archivo_cargado is not None:
                     dest = "CLIENTE (VENTA)"
 
                 if orig and dest:
-                    viajes_parciales.append({
-                        'Fecha': row['Fecha'], 'Origen_Real': orig, 'Destino_Real': dest,
-                        'Kilos': kg_abs, 'TP': tp, 'Articulo': row['NomArticulo'], 'Lote': row['NroLote']
+                    viajes_procesados.append({
+                        'Fecha': row['Fecha'],
+                        'Remito': remito,
+                        'Origen_Real': orig,
+                        'Destino_Real': dest,
+                        'Kilos': kg_abs,
+                        'TP': tp,
+                        'Articulo': row['NomArticulo'],
+                        'Lote': row['NroLote']
                     })
 
-            df_viajes_filtrados = pd.DataFrame(viajes_parciales)
-
-            if df_viajes_filtrados.empty:
-                st.info("No se encontraron viajes parciales (menores a 25.000 Kg) en este reporte.")
+            if not viajes_procesados:
+                st.info("No se encontraron movimientos reales de TRANSITO o CMV para analizar.")
             else:
-                df_viajes_filtrados['Periodo_Viaje'] = df_viajes_filtrados['Fecha'].dt.to_period(f'{dias_ventana}D').astype(str)
-                
-                df_consolidado = df_viajes_filtrados.groupby(['Origen_Real', 'Destino_Real', 'Periodo_Viaje', 'TP']).agg(
-                    Kilos_Totales=('Kilos', 'sum'),
-                    Variedad_Articulos=('Articulo', 'nunique'),
-                    Despachos_Fragmentados=('Kilos', 'count')
+                df_universo = pd.DataFrame(viajes_procesados)
+
+                # 3. REGLA DE ORO: Agrupar por Remito para saber el peso total del camión físico
+                df_remitos_totales = df_universo.groupby('Remito').agg(
+                    Kilos_Totales_Remito=('Kilos', 'sum'),
+                    Fecha_Remito=('Fecha', 'first'),
+                    Origen_Remito=('Origen_Real', 'first'),
+                    Destino_Remito=('Destino_Real', 'first'),
+                    TP_Remito=('TP', 'first')
                 ).reset_index()
-                
-                ineficiencias = df_consolidado[df_consolidado['Despachos_Fragmentados'] > 1].sort_values(by='Despachos_Fragmentados', ascending=False).reset_index(drop=True)
-                
-                if ineficiencias.empty:
-                    st.success("✅ ¡Gran eficiencia! No hay tramos fragmentados repetidos en este período.")
+
+                # Filtrar: Nos quedamos SOLO con los remitos parciales (< 25.000 kg)
+                df_remitos_chicos = df_remitos_totales[df_remitos_totales['Kilos_Totales_Remito'] <= 25000].copy()
+
+                if df_remitos_chicos.empty:
+                    st.success("✅ ¡Eficiencia Total! Todos los remitos emitidos en este reporte corresponden a camiones completos (> 25.000 Kg).")
                 else:
-                    st.warning(f"⚠️ Se detectaron {len(ineficiencias)} rutas con envíos fragmentados menores a 25.000 Kg.")
+                    # Asignamos la ventana temporal a los remitos chicos
+                    df_remitos_chicos['Periodo_Viaje'] = df_remitos_chicos['Fecha_Remito'].dt.to_period(f'{dias_ventana}D').astype(str)
                     
-                    ineficiencias_tabla = ineficiencias.copy()
-                    ineficiencias_tabla.columns = ['Punto de Origen', 'Punto / Destino Logístico', 'Ventana Temporal', 'Tipo de Flujo', 'Kilos Acumulados Total', 'Variedad Semillas', 'Cantidad Despachos Cortos']
-                    
-                    # Dataframe interactivo con selección de fila única
-                    seleccion = st.dataframe(
-                            ineficiencias_tabla.style.format({"Kilos Acumulados Total": "{:,.0f}"}),
+                    # 4. Agrupamos por Origen y Destino para ver qué Remitos chicos coincidieron en el tramo
+                    df_resumen_consolidacion = df_remitos_chicos.groupby(['Origen_Remito', 'Destino_Remito', 'Periodo_Viaje', 'TP_Remito']).agg(
+                        Kilos_Acumulados_Tramo=('Kilos_Totales_Remito', 'sum'),
+                        Cantidad_Remitos_Fragmentados=('Remito', 'count')
+                    ).reset_index()
+
+                    # Filtrar donde haya ineficiencia real: Más de 1 remito chico enviado en el mismo tramo/período
+                    ineficiencias = df_resumen_consolidacion[df_resumen_consolidacion['Cantidad_Remitos_Fragmentados'] > 1].sort_values(by='Cantidad_Remitos_Fragmentados', ascending=False).reset_index(drop=True)
+
+                    if ineficiencias.empty:
+                        st.success("✅ No se detectaron Remitos parciales duplicados para los mismos tramos en las ventanas de tiempo analizadas.")
+                    else:
+                        st.warning(f"⚠️ Se detectaron {len(ineficiencias)} agrupaciones de rutas con Remitos chicos que pudieron viajar juntos.")
+
+                        # Presentación limpia de la tabla ejecutiva
+                        ineficiencias_tabla = ineficiencias.copy()
+                        ineficiencias_tabla.columns = ['Punto de Origen', 'Punto / Destino Logístico', 'Ventana Temporal', 'Tipo de Flujo', 'Kilos Acumulados Totales', 'Cantidad Remitos Emitidos']
+
+                        # Mostrar tabla interactiva
+                        seleccion = st.dataframe(
+                            ineficiencias_tabla.style.format({"Kilos Acumulados Totales": "{:,.0f}"}),
                             use_container_width=True, hide_index=True,
                             selection_mode="single-row", on_select="rerun"
-                    )
-                                        
-                    filas_seleccionadas = seleccion.get("selection", {}).get("rows", [])
-                    
-                    if filas_seleccionadas:
-                        indice_fila = filas_seleccionadas[0]
-                        fila_activa = ineficiencias.iloc[indice_fila]
-                        
-                        st.markdown("---")
-                        st.subheader(f"🔍 Detalle de Viajes Consolidables para el Tramo:")
-                        st.info(f"📍 **Origen:** {fila_activa['Origen_Real']} ➡️ **Destino:** {fila_activa['Destino_Real']} | **Ventana:** {fila_activa['Periodo_Viaje']}")
-                        
-                        df_detalle_viajes = df_viajes_filtrados[
-                            (df_viajes_filtrados['Origen_Real'] == fila_activa['Origen_Real']) &
-                            (df_viajes_filtrados['Destino_Real'] == fila_activa['Destino_Real']) &
-                            (df_viajes_filtrados['Periodo_Viaje'] == fila_activa['Periodo_Viaje']) &
-                            (df_viajes_filtrados['TP'] == fila_activa['TP'])
-                        ].copy()
-                        
-                        df_detalle_viajes['Fecha'] = df_detalle_viajes['Fecha'].dt.strftime('%Y-%m-%d')
-                        df_detalle_viajes_tabla = df_detalle_viajes[['Fecha', 'Lote', 'Articulo', 'Kilos', 'TP']].sort_values(by='Fecha')
-                        df_detalle_viajes_tabla.columns = ['📅 Fecha Despacho', '🆔 Nro Lote', '🌱 Producto / Variedad', '⚖️ Kilos Transportados', '⚙️ Tipo Movimiento']
-                        
-                        st.dataframe(
-                            df_detalle_viajes_tabla.style.format({"⚖️ Kilos Transportados": "{:,.0f}"}),
-                            use_container_width=True, hide_index=True
                         )
-                    else:
-                        st.info("💡 Hacé clic en la casilla izquierda de cualquier fila para abrir el desglose de los camiones chicos.")
+
+                        # 5. DETALLE AL HACER CLIC: Apertura por Remito físico
+                        filas_seleccionadas = seleccion.get("selection", {}).get("rows", [])
+
+                        if filas_seleccionadas:
+                            indice_fila = filas_seleccionadas[0]
+                            fila_activa = ineficiencias.iloc[indice_fila]
+
+                            st.markdown("---")
+                            st.subheader("🔍 Apertura Técnica de Remitos en este Tramo:")
+                            st.info(f"📍 **Origen:** {fila_activa['Origen_Remito']} ➡️ **Destino:** {fila_activa['Destino_Remito']} | **Ventana:** {fila_activa['Periodo_Viaje']}")
+
+                            # Buscamos cuáles remitos componen esta ineficiencia
+                            remitos_asociados = df_remitos_chicos[
+                                (df_remitos_chicos['Origen_Remito'] == fila_activa['Origen_Remito']) &
+                                (df_remitos_chicos['Destino_Remito'] == fila_activa['Destino_Remito']) &
+                                (df_remitos_chicos['Periodo_Viaje'] == fila_activa['Periodo_Viaje']) &
+                                (df_remitos_chicos['TP_Remito'] == fila_activa['TP_Remito'])
+                            ]['Remito'].unique()
+
+                            # Traemos el detalle de materiales/lotes de esos remitos específicos
+                            df_detalle_final = df_universo[df_universo['Remito'].isin(remitos_asociados)].copy()
+                            df_detalle_final['Fecha'] = df_detalle_final['Fecha'].dt.strftime('%Y-%m-%d')
+                            
+                            df_detalle_final_tabla = df_detalle_final[['Fecha', 'Remito', 'Lote', 'Articulo', 'Kilos']].sort_values(by=['Fecha', 'Remito'])
+                            df_detalle_final_tabla.columns = ['📅 Fecha Despacho', '📄 Nro. Remito (NOMBRE)', '🆔 Nro. Lote', '🌱 Producto / Variedad', '⚖️ Kilos del Renglón']
+
+                            st.dataframe(
+                                df_detalle_final_tabla.style.format({"⚖️ Kilos del Renglón": "{:,.0f}"}),
+                                use_container_width=True, hide_index=True
+                            )
+                        else:
+                            st.info("💡 Hacé clic en la casilla izquierda de cualquier fila para auditar qué Remitos y qué productos componen el desvío.")
+
+
         # ------------------------------------------------------------------
         # PANTALLA 3: ANÁLISIS DE HUBS (Ubicación de depósitos)
         # ------------------------------------------------------------------
