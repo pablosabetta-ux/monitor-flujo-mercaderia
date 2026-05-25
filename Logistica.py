@@ -803,14 +803,21 @@ if archivo_cargado is not None:
                         marker=dict(size=tamaños_nodos, color='#2ecc71', line=dict(width=1.5, color='black')),
                         text=nombres_nodos, hoverinfo='text'
                     ))
-
+                    
                 fig.update_layout(
                     geo = dict(
-                        scope = 'south america',
-                        showland = True, landcolor = '#111111', # Fondo oscuro elegante para resaltar los hilos
-                        showcountries = True, countrycolor = '#444444',
-                        center = dict(lat=-34.5, lon=-60.5), # Centrado automático en la zona núcleo argentina
-                        projection_scale = 6
+    scope = 'south america',
+                        resolution = 50,
+                        showframe = False,
+                        showcoastlines = True,
+                        coastlinecolor = '#1e7e34',  # Costa verde oscura
+                        showland = True,
+                        landcolor = '#000000',      # Superficie terrestre negra
+                        showlakes = True,
+                        showsubunits = True if not geojson_provincias else False, # Solo mostramos límites si no tenemos el GeoJSON para dibujarlos
+                        subunitcolor = '#1e7e34', # Color de contorno provincial nativo para el Plan B
+                        subunitwidth = 3,         # Grosor de la línea del límite interprovincial
+                        bgcolor = '#000000'         # Fondo general del recuadro negro
                     ),
                     margin = dict(l=0, r=0, t=30, b=0),
                     height = 600
