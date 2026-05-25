@@ -63,11 +63,6 @@ def generar_mapa_limpio(df_flujo_mapa, coordenadas_dict):
             text = textos_hover
         ))
 
-    st.subheader("Mapa de Rutas Activas")
-    st.plotly_chart(fig, use_container_width=True)
-
-#------------------FIN - DEF MAPA LIMPIO------------------#
-
     # --- AGREGAR NODOS FIJOS COMO BURBUJAS DE VOLUMEN ---
     # Dibujamos los puntos de las localidades para identificar los centros de masa
     lats_nodos, lons_nodos, nombres_nodos, tamaños_nodos = [], [], [], []
@@ -99,6 +94,11 @@ def generar_mapa_limpio(df_flujo_mapa, coordenadas_dict):
         margin = dict(l=0, r=0, t=30, b=0),
         height = 600
     )
+
+    # --- RENDERIZADO EN STREAMLIT ---
+    st.subheader("Mapa de Rutas Activas")
+    st.plotly_chart(fig, use_container_width=True)
+
     return fig
 
 # Configuración de la página de Streamlit
@@ -792,78 +792,6 @@ if archivo_cargado is not None:
                     )
                 )
 
-            else:
-                # ==================================================================
-                # NUEVA LÓGICA: MAPA TRIDIMENSIONAL (Torres de Kilos)
-                # ==================================================================
-                
-                #generar_mapa_limpio(df_flujo_mapa, COORDENADAS)
-                
-                fig_mapa = go.Figure()
-
-                # Agrupamos por Tipo de Movimiento para crear capas independientes en la leyenda
-                for tipo_mov in df_flujo_mapa['TP'].unique():
-                    df_tipo = df_flujo_mapa[df_flujo_mapa['TP'] == tipo_mov]
-                    
-                    lats_lineas = []
-                    lons_lineas = []
-                    textos_hover = []
-                    
-                    for idx, row in df_tipo.iterrows():
-                        orig = row['Origen']
-                        dest = row['Destino']
-                        kilos = row['Kilos']
-                        
-                        if orig in COORDENADAS and dest in COORDENADAS:
-                            c_orig = COORDENADAS[orig]
-                            c_dest = COORDENADAS[dest]
-                            
-                            # --- CÁLCULO DE ARCOS CURVOS PARA NO SUPERPONER LÍNEAS ---
-                            # Creamos 15 puntos intermedios entre el origen y el destino
-                            puntos = 15
-                            lats = np.linspace(c_orig['lat'], c_dest['lat'], puntos)
-                            lons = np.linspace(c_orig['lon'], c_dest['lon'], puntos)
-                            
-                            # Agregamos una distorsión matemática en forma de parábola (arco)
-                            distorsion = np.sin(np.linspace(0, np.pi, puntos)) * 0.15  # Ajustar el 0.15 para más/menos curva
-                            
-                            # Desviamos las coordenadas sutilmente para curvar la línea
-                            lats_curvas = lats + distorsion * (c_dest['lon'] - c_orig['lon']) * 0.2
-                            lons_curvas = lons - distorsion * (c_dest['lat'] - c_orig['lat']) * 0.2
-                            
-                            # Estructuramos los vectores para Plotly separando cada tramo con None
-                            for la, lo in zip(lats_curvas, lons_curvas):
-                                lats_lineas.append(la)
-                                lons_lineas.append(lo)
-                            lats_lineas.append(None)
-                            lons_lineas.append(None)
-                            
-                            # Texto informativo para cuando pases el mouse por la ruta
-                            textos_hover.append(f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}")
-
-                    # Definición de colores estratégicos por tipo de flujo
-                    color_linea = "#3498db" if tipo_mov == "TRANSITO" else "#f1c40f"
-                    if tipo_mov == "CMV": color_linea = "#e67e22" # Naranja para ventas comerciales
-                    
-                    # Agregamos la capa de vectores al mapa
-                    fig_mapa.add_trace(go.Scattergeo(
-                        lon = lons_lineas, lat = lats_lineas,
-                        mode = 'lines',
-                        name = f"Flujos {tipo_mov}",
-                        line = dict(width = 2, color = color_linea),
-                        opacity = 0.6,
-                        hoverinfo = 'text',
-                        text = textos_hover
-                    ))
-                
-                    # --- RENDERIZADO EN STREAMLIT ---
-                    st.subheader("Mapa de Rutas Activas")
-                    st.plotly_chart(fig_mapa, use_container_width=True)
-                
-                # --- RENDERIZADO EN STREAMLIT ---
-                st.subheader("Mapa de Rutas Activas")
-                st.plotly_chart(fig_mapa, use_container_width=True)
-            
                 st.markdown("##### Resumen de Tramos Geográficos")
                 df_tabla_geo = df_mapa_consolidado.copy()
                 st.dataframe(
@@ -879,6 +807,14 @@ if archivo_cargado is not None:
                     }
                 )
 
+            else:
+                # ==================================================================
+                # NUEVA LÓGICA: MAPA TRIDIMENSIONAL (Torres de Kilos)
+                # ==================================================================
+                
+                generar_mapa_limpio(df_flujo_mapa, COORDENADAS)
+
+            
 
 
 
