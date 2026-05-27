@@ -859,24 +859,31 @@ if archivo_cargado is not None:
 
             dias_ventana = st.slider("Ventana de días para agrupar viajes cercanos:", min_value=1, max_value=7, value=3)
             
-            # --- CARGA DINÁMICA DE LA HOJA DE CLIENTES ---
-            dict_clientes_localidad = {}
+            # --- CARGA DINÁMICA DE LA HOJA DE CLIENTES (Puente por campo 'NOMBRE') ---
+            dict_remitos_localidad = {}
             try:
                 df_clientes = pd.read_excel(archivo_cargado, sheet_name="CLIENTES")
                 df_clientes.columns = df_clientes.columns.str.strip()
-                # Mapeamos cada cliente con su Localidad informada
-                if 'CLIENTE' in df_clientes.columns and 'LOCALIDAD' in df_clientes.columns:
-                    dict_clientes_localidad = dict(zip(df_clientes['CLIENTE'].astype(str).str.strip().str.upper(), 
-                                                        df_clientes['LOCALIDAD'].astype(str).str.strip()))
-            except Exception:
-                st.warning("⚠️ No se pudo procesar la hoja 'CLIENTES'. Se utilizará el nombre del depósito/cliente por defecto.")
+                
+                # Convertimos a string y limpiamos para asegurar el cruce perfecto de los remitos
+                if 'NOMBRE' in df_clientes.columns and 'LOCALIDAD' in df_clientes.columns:
+                    df_clientes['NOMBRE_Clean'] = df_clientes['NOMBRE'].astype(str).str.strip().str.upper()
+                    dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD'].astype(str).str.strip()))
+            except Exception as e:
+                st.warning(f"⚠️ No se pudo procesar la hoja 'CLIENTES' o falta la columna 'LOCALIDAD'. Error: {e}")
 
             # Función auxiliar para calcular distancias entre puntos (Fórmula de Haversine)
             def calcular_distancia_km(ponto1, ponto2):
-                if not ponto1 or not ponto2 or ponto1 not in COORDENADAS or ponto2 not in COORDENADAS:
-                    return 9999 # Si no hay coordenadas, asumimos que no están cerca
-                lat1, lon1 = COORDENADAS[ponto1]['lat'], COORDENADAS[ponto1]['lon']
-                lat2, lon2 = COORDENADAS[ponto2]['lat'], COORDENADAS[ponto2]['lon']
+                if not ponto1 or not ponto2:
+                    return 0
+                p1_upper, p2_upper = str(ponto1).upper().strip(), str(ponto2).upper().strip()
+                if p1_upper == p2_upper:
+                    return 0
+                if p1_upper not in COORDENADAS or p2_upper not in COORDENADAS:
+                    return 9999 # Si no hay coordenadas mapeadas, asumimos distancia lejana por seguridad
+                
+                lat1, lon1 = COORDENADAS[p1_upper]['lat'], COORDENADAS[p1_upper]['lon']
+                lat2, lon2 = COORDENADAS[p2_upper]['lat'], COORDENADAS[p2_upper]['lon']
                 R = 6371.0 # Radio de la Tierra en Kms
                 dlat = np.radians(lat2 - lat1)
                 dlon = np.radians(lon2 - lon1)
@@ -899,6 +906,7 @@ if archivo_cargado is not None:
                 kg_abs = round(abs(kg), 2)
                 lote_actual = str(row['NroLote']).strip().upper()
                 remito = str(row['NOMBRE']).strip()
+                remito_upper = remito.upper()
                 
                 if (tp == 'TRANSITO' and kg > 0) or dep == "DESCONOCIDO" or remito in ["NAN", ""]:
                     continue
@@ -906,12 +914,12 @@ if archivo_cargado is not None:
                 orig, dest = None, None
                 if tp == 'TRANSITO':
                     orig = dep
-                    dest = transito_por_lote.get(lote_actual, "Mercadería en Tránsito")
+                    # Para tránsitos buscamos primero si el remito tiene localidad en CLIENTES, sino usa el flujo por lote
+                    dest = dict_remitos_localidad.get(remito_upper, transito_por_lote.get(lote_actual, "Mercadería en Tránsito"))
                 elif tp == 'CMV':
                     orig = dep
-                    # Buscamos la localidad en el dict de la hoja CLIENTES usando el identificador del registro
-                    id_cliente_excel = str(row['NOMBRE_CLIENTE']).strip().upper() if 'NOMBRE_CLIENTE' in df_base.columns else dep.upper()
-                    dest = dict_clientes_localidad.get(id_cliente_excel, "CLIENTE (VENTA)")
+                    # Buscamos la localidad en la hoja CLIENTES usando el número de remito (campo NOMBRE)
+                    dest = dict_remitos_localidad.get(remito_upper, f"Zona {dep}")
 
                 if orig and dest:
                     viajes_procesados.append({
@@ -920,11 +928,11 @@ if archivo_cargado is not None:
                     })
 
             if not viajes_procesados:
-                st.info("No se registraron movimientos de tramos comerciales elegibles en este archivo.")
+                st.info("No se registraron movimientos elegibles de TRANSITO o CMV en este archivo.")
             else:
                 df_universo = pd.DataFrame(viajes_procesados)
 
-                # Agrupamos el peso consolidado por Remito Físico
+                # Agrupamos el peso total por Remito Físico real
                 df_remitos_totales = df_universo.groupby('Remito').agg(
                     Kilos_Totales_Remito=('Kilos', 'sum'),
                     Fecha_Remito=('Fecha', 'first'),
@@ -933,15 +941,15 @@ if archivo_cargado is not None:
                     TP_Remito=('TP', 'first')
                 ).reset_index()
 
-                # Filtro de camiones parciales (Menores o iguales a 25.000 Kg)
+                # Nos quedamos estrictamente con camiones parciales (Menores o iguales a 25.000 Kg)
                 df_remitos_chicos = df_remitos_totales[df_remitos_totales['Kilos_Totales_Remito'] <= 25000].copy()
 
                 if df_remitos_chicos.empty:
-                    st.success("✅ ¡Eficiencia Máxima! Todos los despachos analizados completaron la capacidad total de carga.")
+                    st.success("✅ ¡Eficiencia Máxima! Todos los remitos emitidos completaron la capacidad completa de un camión (> 25.000 Kg).")
                 else:
                     df_remitos_chicos['Periodo_Viaje'] = df_remitos_chicos['Fecha_Remito'].dt.to_period(f'{dias_ventana}D').astype(str)
                     
-                    # Agrupación base para la tabla resumen
+                    # Tabla resumen ejecutiva por tramos generales
                     df_resumen_consolidacion = df_remitos_chicos.groupby(['Origen_Remito', 'Destino_Remito', 'Periodo_Viaje', 'TP_Remito']).agg(
                         Kilos_Acumulados_Tramo=('Kilos_Totales_Remito', 'sum'),
                         Cantidad_Remitos_Fragmentados=('Remito', 'count')
@@ -950,14 +958,14 @@ if archivo_cargado is not None:
                     ineficiencias = df_resumen_consolidacion[df_resumen_consolidacion['Cantidad_Remitos_Fragmentados'] > 1].sort_values(by='Cantidad_Remitos_Fragmentados', ascending=False).reset_index(drop=True)
 
                     if ineficiencias.empty:
-                        st.success("✅ Estructura logística óptima: no se encontraron remitos fragmentados para destinos coincidentes.")
+                        st.success("✅ Estructura óptima: No se detectaron remitos fraccionados duplicados para los mismos destinos exactos.")
                     else:
-                        st.warning(f"⚠️ Se detectaron {len(ineficiencias)} alertas de rutas con camiones fragmentados en ventanas de {dias_ventana} días.")
+                        st.warning(f"⚠️ Se detectaron {len(ineficiencias)} rutas base con fragmentación de carga.")
 
                         ineficiencias_tabla = ineficiencias.copy()
                         ineficiencias_tabla.columns = ['Punto de Origen', 'Destino / Localidad Comercial', 'Ventana Temporal', 'Tipo de Flujo', 'Kilos Acumulados Totales', 'Cantidad Remitos Emitidos']
 
-                        # Tabla de control ejecutiva superior
+                        # Render de la tabla superior interactiva
                         seleccion = st.dataframe(
                             ineficiencias_tabla.style.format({"Kilos Acumulados Totales": "{:,.0f}"}),
                             use_container_width=True, hide_index=True,
@@ -966,7 +974,7 @@ if archivo_cargado is not None:
 
                         filas_seleccionadas = seleccion.get("selection", {}).get("rows", [])
 
-                        # --- 4. DETALLE TÉCNICO INTERACTIVO CON FILTRO DE 200 KMS ---
+                        # --- APERTURA TÉCNICA CON ANÁLISIS DE RADIO DE 200 KMS ---
                         if filas_seleccionadas:
                             indice_fila = filas_seleccionadas[0]
                             fila_activa = ineficiencias.iloc[indice_fila]
@@ -974,29 +982,36 @@ if archivo_cargado is not None:
                             st.markdown("---")
                             st.subheader("🔍 Apertura Técnica de Remitos en este Tramo:")
                             
-                            # Traemos todos los remitos chicos emitidos para la misma ventana temporal
+                            # Traemos todos los remitos parciales emitidos en la misma ventana de días
                             remitos_ventana = df_remitos_chicos[df_remitos_chicos['Periodo_Viaje'] == fila_activa['Periodo_Viaje']].copy()
                             
                             remitos_validados = []
                             for idx_r, remito_row in remitos_ventana.iterrows():
-                                # Calculamos la distancia entre el destino seleccionado en la tabla de arriba y los demás destinos de la ventana
-                                distancia = calcular_distancia_km(str(fila_activa['Destino_Remito']).upper(), str(remito_row['Destino_Remito']).upper())
+                                # Calculamos la distancia real usando la fórmula de Haversine entre las localidades
+                                distancia = calcular_distancia_km(fila_activa['Destino_Remito'], remito_row['Destino_Remito'])
                                 
-                                # Aplicamos tu Regla de Negocio: Mismo origen y destinos a menos de 200 kilómetros
+                                # Criterio geográfico: Mismo origen y destinos a menos de 200 Kms de distancia
                                 if remito_row['Origen_Remito'] == fila_activa['Origen_Remito'] and distancia <= 200:
+                                    if distancia == 0:
+                                        dictamen = "⚠️ Duplicado (Mismo Destino Exacto)"
+                                        dist_str = "0.0 Km"
+                                    else:
+                                        dictamen = "🚨 CONSOLIDABLE (Destino Cercano < 200Km)"
+                                        dist_str = f"{distancia:.1f} Km"
+
                                     remitos_validados.append({
                                         'Remito': remito_row['Remito'],
                                         'Localidad_Destino': remito_row['Destino_Remito'],
-                                        'Distancia_Ref': f"{distancia:.1f} Km" if distancia > 0 else "Mismo Destino",
-                                        'Accion': "🚨 CONSOLIDABLE (Misma Ruta)" if distancia > 0 else "⚠️ Duplicado en Destino"
+                                        'Distancia_Ref': dist_str,
+                                        'Accion': dictamen
                                     })
                             
                             df_geo_valida = pd.DataFrame(remitos_validados)
 
                             if df_geo_valida.empty:
-                                st.info("No se encontraron viajes adicionales con criterio geográfico combinable en este rango.")
+                                st.info("No se hallaron desvíos o remitos combinables para este tramo.")
                             else:
-                                # Unimos las propiedades geográficas calculadas con el detalle de artículos de la base
+                                # Cruzamos el filtro geográfico con los renglones físicos de los artículos/lotes
                                 df_detalle_universo = df_universo[df_universo['Remito'].isin(df_geo_valida['Remito'])].copy()
                                 df_final_render = df_detalle_universo.merge(df_geo_valida, on='Remito', how='left')
                                 
@@ -1004,23 +1019,23 @@ if archivo_cargado is not None:
                                 df_final_render_tabla = df_final_render[['Fecha', 'Remito', 'Lote', 'Articulo', 'Kilos', 'Localidad_Destino', 'Distancia_Ref', 'Accion']].sort_values(by=['Accion', 'Fecha', 'Remito'])
                                 
                                 df_final_render_tabla.columns = [
-                                    '📅 Fecha Despacho', '📄 Nro. Remito', '🆔 Nro. Lote', 
+                                    '📅 Fecha Despacho', '📄 Nro. Remito (NOMBRE)', '🆔 Nro. Lote', 
                                     '🌱 Producto / Variedad', '⚖️ Kilos Renglón', 
-                                    '📍 Localidad (Hoja Clientes)', '🛣️ Distancia de Desvío', '📢 Dictamen Operativo'
+                                    '📍 Localidad Real Destino', '🛣️ Distancia al Destino Base', '📢 Dictamen Operativo'
                                 ]
 
-                                # Resaltamos visualmente las filas que son consolidables para facilitarte la lectura financiera
+                                # Formato de color para identificar los desvíos rápidamente
                                 def colorear_dictamen(val):
-                                    color = 'rgba(231, 76, 60, 0.2)' if 'CONSOLIDABLE' in str(val) else 'rgba(241, 196, 15, 0.2)'
-                                    return f'background-color: {color}'
+                                    if 'Cercano' in str(val):
+                                        return 'background-color: rgba(46, 204, 113, 0.2)' # Verde suave para rutas combinables
+                                    return 'background-color: rgba(241, 196, 15, 0.2)' # Amarillo para el mismo destino exacto
 
                                 st.dataframe(
                                     df_final_render_tabla.style.format({"⚖️ Kilos Renglón": "{:,.0f}"}).map(colorear_dictamen, subset=['📢 Dictamen Operativo']),
                                     use_container_width=True, hide_index=True
                                 )
                         else:
-                            st.info("💡 Hacé clic en el casillero izquierdo de cualquier fila de arriba para auditar qué remitos e itinerarios cruzaban por el mismo radio de 200 Km.")
-
+                            st.info("💡 Hacé clic en la casilla izquierda de cualquier fila superior para abrir la auditoría geográfica por localidades y distancias.")
         # ------------------------------------------------------------------
         # PANTALLA 3: ANÁLISIS DE HUBS (Ubicación de depósitos)
         # ------------------------------------------------------------------
