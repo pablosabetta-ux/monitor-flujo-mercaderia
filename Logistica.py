@@ -573,7 +573,7 @@ if archivo_cargado is not None:
                 st.subheader("🗺️ Representación Geográfica de Entregas")
                 
                 # 🎛️ El interruptor para cambiar de dimensión en tiempo real
-                modo_mapa = st.radio("Seleccioná la perspectiva del mapa:", ["Planos (2D)", "Volúmenes en Torres (3D)"], horizontal=True)
+                modo_mapa = st.radio("Seleccioná la perspectiva del mapa:", ["Ver1", "Ver2"], horizontal=True)
 
                 if modo_mapa == "Planos (2D)":
                     if df_flujo_mapa.empty:
@@ -746,7 +746,7 @@ if archivo_cargado is not None:
 
                 else:
                     # ==================================================================
-                    # NUEVA LÓGICA: MAPA TRIDIMENSIONAL (Torres de Kilos)
+                    # NUEVA LÓGICA: 
                     # ==================================================================
                     
                     fig = go.Figure()
@@ -827,10 +827,14 @@ if archivo_cargado is not None:
 
                     if lats_nodos:
                         fig.add_trace(go.Scattergeo(
-                            lon=lons_nodos, lat=lats_nodos, mode='markers',
+                            lon=lons_nodos, lat=lats_nodos,
+                            mode='markers+text',
                             name="Puntos Operativos Activos",
                             marker=dict(size=tamaños_nodos, color='#2ecc71', line=dict(width=1.5, color='black')),
-                            text=nombres_nodos, hoverinfo='text'
+                            text=nombres_nodos,
+                            textposition="top center",  # Ubica el texto arriba del punto verde (puede ser "top right", "bottom center", etc.)
+                            textfont=dict(family="Arial", size=11, color="white"), # Estética legible sobre fondo oscuro
+                            hoverinfo='text'
                         ))
                         
                     fig.update_layout(
