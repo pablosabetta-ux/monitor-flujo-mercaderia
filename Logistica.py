@@ -133,13 +133,6 @@ if archivo_cargado is not None:
         except Exception as e:
             st.warning(f"⚠️ No se pudo procesar la hoja 'CLIENTES' o falta la columna 'LOCALIDAD'. Error: {e}")
 
-        #transito_por_lote = {}
-        #if df_transito is not None and 'NroLote' in df_transito.columns and 'LOCALIDAD' in df_transito.columns:
-        #    transito_por_lote = dict(zip(
-        #        df_transito['NroLote'].astype(str).str.upper().str.strip(),
-        #        df_transito['LOCALIDAD'].astype(str).str.upper().str.strip()
-        #    ))
-
         # ==================================================================
         # 2. MENÚ PRINCIPAL Y BARRA LATERAL (CONTROL DE PANTALLAS)
         # ==================================================================
@@ -908,6 +901,7 @@ if archivo_cargado is not None:
                             mode = 'lines',
                             name=nombre_traza,
                             line = dict(width = 2, color = color_linea),
+                            symbol = "triangle-up" if tipo_mov == "TRANSITO" else "diamond",
                             opacity = 0.6,
                             hoverinfo = 'text',
                             text = textos_hover
