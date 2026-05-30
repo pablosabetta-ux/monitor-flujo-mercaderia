@@ -793,8 +793,8 @@ if archivo_cargado is not None:
                         textos_hover = []
                         
                         for idx, row in df_tipo.iterrows():
-                            orig = row['Origen']
-                            dest = row['Destino']
+                            orig = row['Origen'].upper().strip()
+                            dest = row['Destino'].upper().strip()
                             kilos = row['Kilos']
                             es_tercero_linea = row['Es_Tercero']
                       
