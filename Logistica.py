@@ -139,8 +139,7 @@ if archivo_cargado is not None:
             
             # Filtro por Familia primero, para acotar
             familias = sorted(df_base['FAMILIA'].dropna().astype(str).unique())
-            #familia_sel = st.sidebar.selectbox("1. Filtrar por Familia:", ["TODAS"] + familias)
-            familia_sel = st.sidebar.selectbox("1. Filtrar por Familia:", familias)
+            familia_sel = st.sidebar.selectbox("1. Filtrar por Familia:", ["TODAS"] + familias)
             
             if familia_sel != "TODAS":
                     df_especies_filtradas = df_base[df_base['FAMILIA'] == familia_sel]
@@ -148,9 +147,8 @@ if archivo_cargado is not None:
                     df_especies_filtradas = df_base
             
             especies_disponibles = sorted(df_especies_filtradas['Species'].dropna().unique())
-            #opciones_especie = ["TODAS"] + especies_disponibles
-            opciones_especie = especies_disponibles
-
+            opciones_especie = ["TODAS"] + especies_disponibles
+            
             especie_seleccionada = st.sidebar.selectbox("🌱 Filtrar por Especie:", opciones_especie)
         
             # Nivel 3: Selección de Artículo / Producto (Filtrado en cascada por los anteriores)
@@ -158,8 +156,19 @@ if archivo_cargado is not None:
             if especie_seleccionada != "TODAS":
                 df_articulos_filtrados = df_articulos_filtrados[df_articulos_filtrados['Species'] == especie_seleccionada]
                 
-            df_articulo = sorted(df_articulos_filtrados['NomArticulo'].dropna().unique())
-            articulo_sel = st.sidebar.selectbox("📦 Seleccionar Artículo:", ["TODOS"] + df_articulo)        
+            if not df_articulos_filtrados.empty:
+                    # Suma absoluta temporal para armar el ranking de volumen real
+                    df_articulos_filtrados['Kilos_Abs_Temp'] = df_articulos_filtrados['Cantidad'].abs()
+                    ranking_articulos = (
+                        df_articulos_filtrados.groupby('NomArticulo')['Kilos_Abs_Temp']
+                        .sum()
+                        .sort_values(ascending=False)
+                        .reset_index()
+                    )
+                    df_articulo = ranking_articulos['NomArticulo'].tolist()
+
+            #df_articulo = sorted(df_articulos_filtrados['NomArticulo'].dropna().unique())
+            articulo_sel = st.sidebar.selectbox("📦 Seleccionar Artículo:", df_articulo)        
 
             # --- FILTRADO DINÁMICO BASE DE DATOS ---
             df_filtrado = df_base[df_base['NomArticulo'] == articulo_sel].copy()
