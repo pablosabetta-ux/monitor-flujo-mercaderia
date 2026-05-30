@@ -368,6 +368,12 @@ if archivo_cargado is not None:
                 kg = float(row['Cantidad'])
                 orig, dest = None, None
                 
+                # --- NUEVA LÓGICA DE ORIGEN DINÁMICO (Traducción por Depósito/Tercero) ---
+                # En lugar de tomar el código crudo de 'DEPOSITO', buscamos su Localidad Real
+                # Si el depósito existe en el diccionario geográfico, usamos su ubicación; si no, dejamos el nombre original
+                dep_upper = dep.upper()
+                orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
+
                 if tp in ['FOB']:
                     orig, dest = "Proveedor Ext.", dep
                 elif tp == 'CPRA':
@@ -379,7 +385,6 @@ if archivo_cargado is not None:
                     # NOTA: Cambiá 'mostrar_ventas' por el nombre de tu variable del botón/checkbox si es diferente
                     if apertura_cliente_sel=="SI":
                         id_cliente = row['NOMBRE']
-                        #id_cliente = str(row['NOMBRE']).strip().upper()
                         
                         # Evaluación del botón de comando de apertura
                         if apertura_cliente and (id_cliente in clientes_dict):
