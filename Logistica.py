@@ -474,43 +474,30 @@ if archivo_cargado is not None:
                     dest_u = normalizar_texto(dest.upper().strip())
                     kg_abs = abs(kg)
 #---------------------------------------DEBUG
+                    # Verificamos si existen en el diccionario para el mapa
+                    existe_origen = orig_u in COORDENADAS
+                    existe_destino = dest_u in COORDENADAS
 
-                # Verificamos si existen en el diccionario para el mapa
-                existe_origen = orig_u in COORDENADAS
-                existe_destino = dest_u in COORDENADAS
+                    # 🔍 GUARDAMOS EL ESTADO DE DEBUG (Pasó o por qué falló)
+                    estado_validacion = "APROBADO ✅"
+                    if not existe_origen and not existe_destino:
+                        estado_validacion = "❌ ERROR: Ni Origen ni Destino existen en COORDENADAS"
+                    elif not existe_origen:
+                        estado_validacion = f"❌ ERROR: Origen '{orig_u}' no encontrado en COORDENADAS"
+                    elif not existe_destino:
+                        estado_validacion = f"❌ ERROR: Destino '{dest_u}' no encontrado en COORDENADAS"
 
-                # 🔍 GUARDAMOS EL ESTADO DE DEBUG (Pasó o por qué falló)
-                estado_validacion = "APROBADO ✅"
-                if not existe_origen and not existe_destino:
-                    estado_validacion = "❌ ERROR: Ni Origen ni Destino existen en COORDENADAS"
-                elif not existe_origen:
-                    estado_validacion = f"❌ ERROR: Origen '{orig_u}' no encontrado en COORDENADAS"
-                elif not existe_destino:
-                    estado_validacion = f"❌ ERROR: Destino '{dest_u}' no encontrado en COORDENADAS"
-
-                rastro_coordenadas_debug.append({
-                    'Fila_Excel': idx,
-                    'Producto': str(row.get('NomArticulo', 'S/D')),
-                    'Nro_Remito_Cuenta': remito,
-                    'Origen_Normalizado': orig_u,
-                    'Destino_Normalizado': dest_u,
-                    'Kilos': kg_abs,
-                    'Estado_Doc': estado_doc,
-                    'Resultado_Validacion': estado_validacion
-                })
-
-
-
-
-
-
-
+                    rastro_coordenadas_debug.append({
+                        'Fila_Excel': idx,
+                        'Producto': str(row.get('NomArticulo', 'S/D')),
+                        'Nro_Remito_Cuenta': remito,
+                        'Origen_Normalizado': orig_u,
+                        'Destino_Normalizado': dest_u,
+                        'Kilos': kg_abs,
+                        'Estado_Doc': estado_doc,
+                        'Resultado_Validacion': estado_validacion
+                    })
 #----------------------------------------------
-
-
-
-
-
                     orig_dest_mapa.append({
                         'Origen': orig_u,
                         'Destino': dest_u,
