@@ -240,6 +240,14 @@ if archivo_cargado is not None:
             apertura_cliente_sel = st.sidebar.radio("Apertura Cliente:", ["NO", "SI"], index=0, help="Determina si el mapa proyecta los clientes individualmente o consolidados.")
             apertura_cliente = (apertura_cliente_sel == "SI")
 
+            # Segmentación de Canales CMV
+            tipo_despacho = st.sidebar.radio(
+                "Filtrar Ventas (CMV) por:",
+                ["TODOS", "Despachos Directos", "Despachos de Terceros"],
+                index=0,
+                help="Permite aislar en el mapa los movimientos operados por logística propia o mediante terceros (R16a)."
+            )
+
 
         # ==================================================================
         # PANTALLA 1: PREPARACIÓN EXCLUSIVA PARA EL SANKEY Y EL MAPA DE FLUJO
@@ -575,7 +583,7 @@ if archivo_cargado is not None:
                 # 🎛️ El interruptor para cambiar de dimensión en tiempo real
                 modo_mapa = st.radio("Seleccioná la perspectiva del mapa:", ["Ver1", "Ver2"], horizontal=True)
 
-                if modo_mapa == "Planos (2D)":
+                if modo_mapa == "Ver1":
                     if df_flujo_mapa.empty:
                         st.info("No hay coordenadas o tramos activos para proyectar geográficamente.")
                     else:
@@ -763,7 +771,23 @@ if archivo_cargado is not None:
                             orig = row['Origen']
                             dest = row['Destino']
                             kilos = row['Kilos']
-                            
+
+                            # --- NUEVA LÓGICA DE FILTRADO DE TERCEROS (R16a) ---
+                            es_tercero = False
+                            if 'ESTADO' in df_base.columns:
+                                # Buscamos el estado original usando el índice de la fila mapeada
+                                val_estado = str(df_base.loc[idx, 'ESTADO']).strip()
+                                if val_estado == "R16a":
+                                    es_tercero = True
+
+                            # Filtramos según la opción elegida en la barra lateral
+                            if tipo_mov == "CMV":
+                                if tipo_despacho == "Despachos Directos" and es_tercero:
+                                    continue
+                                if tipo_despacho == "Despachos de Terceros" and not es_tercero:
+                                    continue
+                            # ---------------------------------------------------    
+                        
                             if orig in COORDENADAS and dest in COORDENADAS:
                                 c_orig = COORDENADAS[orig]
                                 c_dest = COORDENADAS[dest]
