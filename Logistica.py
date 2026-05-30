@@ -830,7 +830,7 @@ if archivo_cargado is not None:
                                 color_linea = "#ece905"  # Púrpura para Terceros
                                 nombre_traza = "CMV - Terceros"
                             elif tipo_despacho == "Despachos Directos":
-                                color_linea = "#f70b0b"  # Naranja para Directos
+                                color_linea = "#2df705"  # Naranja para Directos
                                 nombre_traza = "CMV - Directos"
                             else:
                                 color_linea = "#fa0909"  # Naranja por defecto si muestra todos
