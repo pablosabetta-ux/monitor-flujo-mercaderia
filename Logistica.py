@@ -488,7 +488,7 @@ if archivo_cargado is not None:
                         estado_validacion = f"❌ ERROR: Destino '{dest_u}' no encontrado en COORDENADAS"
 
                     dato_clie = COORDENADAS[dest_u].get('display_name', dest_u) if existe_destino else "N/A"
-                    localidad_clie = COORDENADAS[dest_u].get('localidad', 'N/A') if existe_destino else "N/A"
+                    localidad_clie = COORDENADAS[dest_u].get('localidad', dest_u) if existe_destino else "N/A"
 
                     rastro_coordenadas_debug.append({
                         'Fila_Excel': idx,
