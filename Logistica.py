@@ -900,7 +900,7 @@ if archivo_cargado is not None:
                         fig.add_trace(go.Scattergeo(
                             lon = lons_lineas, lat = lats_lineas,
                             mode = 'lines',
-                            name=nombre_traza & info_linea,
+                            name=f"{nombre_traza} - {info_linea}",
                             line = dict(width = 2, color = color_linea),
                             opacity = 0.6,
                             hoverinfo = 'text',
