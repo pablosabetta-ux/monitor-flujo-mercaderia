@@ -430,13 +430,15 @@ if archivo_cargado is not None:
                         rastro_auditoria.append({
                             'Excel_Linea': idx,
                             'Deposito': dep,
-                            'Dep_Upper': dep_upper,
                             'Excel_Nombre': remito,
                             'Remito_Upper': remito_upper,
                             'Excel_Estado': estado_doc,
                             'Origen': orig,
                             'Destino': dest,
-                            'Display Name':f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad']})"
+                            'Display Name':f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad']})",
+                            'Latitud': clientes_dict[id_cliente]['lat'] if id_cliente in clientes_dict else None,
+                            'Longitud': clientes_dict[id_cliente]['lon'] if id_cliente in clientes_dict else None,
+                            'Localidad': clientes_dict[id_cliente]['localidad'] if id_cliente in clientes_dict else None
                         })
 
                 elif tp == 'PRODUCC': 
