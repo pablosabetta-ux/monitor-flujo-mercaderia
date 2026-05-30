@@ -369,6 +369,8 @@ if archivo_cargado is not None:
             # Creamos el diccionario de parejas: Clave = Lote Limpio -> Valor = Depósito Destino
             transito_por_lote = dict(zip(ingresos_t['Lote_Clean'], ingresos_t['DEPOSITO']))
 
+            rastro_auditoria = []
+
             for idx, row in df_filtrado.iterrows():
                 tp = row['TP'].strip()
                 dep = row['DEPOSITO'].strip().upper()
@@ -424,16 +426,18 @@ if archivo_cargado is not None:
                         else:
                             orig, dest = dep, "CLIENTE (VENTA)"
                     
-                        # 🟢 INYECCIÓN DE MONITOREO EN CONSOLA (Temporal)
-                        if "HUMBOLDT" in dep_upper or "SORGO" in str(row.get('NomArticulo', '')).upper():
-                            print("=" * 60)
-                            print(f"🔄 PROCESANDO FILA DE CONTROL - Índice Excel: {idx}")
-                            print(f"  🔹 DEPOSITO (Excel): '{dep}' -> Estandarizado: '{dep_upper}'")
-                            print(f"  🔹 NOMBRE (Excel):   '{remito}' -> Estandarizado: '{remito_upper}'")
-                            print(f"  🔹 ESTADO (Excel):   '{estado_doc}'")
-                            print(f"  🔹 Cruce Clientes:   Localidad recuperada -> '{dict_remitos_localidad.get(remito_upper, 'NO ENCONTRADO')}'")
-                            print(f"  👉 RESULTADO MAPA -> Origen: '{orig}' | Destino: '{dest}'")
-                            print("=" * 60)
+                        # 🔍 Capturamos las variables crudas y procesadas de esta vuelta
+                        rastro_auditoria.append({
+                            'Excel_Linea': idx,
+                            'Deposito': dep,
+                            'Dep_Upper': dep_upper,
+                            'Excel_Nombre': remito,
+                            'Remito_Upper': remito_upper,
+                            'Excel_Estado': estado_doc,
+                            'Origen': orig,
+                            'Destino': dest,
+                            'Display Name':f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad']})"
+                        })
 
                 elif tp == 'PRODUCC': 
                     orig, dest = ("LINEA PROCESO (VIRT.)", dep) if kg > 0 else (dep, "LINEA PROCESO (VIRT.)")
@@ -839,7 +843,14 @@ if archivo_cargado is not None:
                             
                             st.write("**Muestra de Tramos (Primeras 10 filas):**")
                             st.dataframe(df_mapa_filtrado[['Origen', 'Destino', 'TP', 'Kilos', 'ESTADO']].head(10))
-                        st.markdown("---")
+    
+                            if rastro_auditoria:
+                                st.write("### 🔬 Trazabilidad Vuelta por Vuelta (`for` loop)")
+                                st.write("Esta tabla muestra qué valor tenía cada variable interna en cada paso del procesamiento:")
+                                df_rastro = pd.DataFrame(rastro_auditoria)
+                                st.dataframe(df_rastro, use_container_width=True)
+    
+                            st.markdown("---")
                         # ==================================================================
 
                         # 2. Simulamos el impacto del filtro seleccionado en la barra lateral
