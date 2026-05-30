@@ -817,13 +817,25 @@ if archivo_cargado is not None:
 
                         # Definición de colores estratégicos por tipo de flujo
                         color_linea = "#1707f0" if tipo_mov == "TRANSITO" else "#a4e905"
-                        if tipo_mov == "CMV": color_linea = "#e4130c" # Naranja para ventas comerciales
+                        nombre_traza = f"Flujos {tipo_mov}"
+                        #if tipo_mov == "CMV": color_linea = "#e4130c" # Naranja para ventas comerciales
+
+                        if tipo_mov == "CMV":
+                            if tipo_despacho == "Despachos de Terceros":
+                                color_linea = "#ece905"  # Púrpura para Terceros
+                                nombre_traza = "CMV - Terceros (R16a)"
+                            elif tipo_despacho == "Despachos Directos":
+                                color_linea = "#f70b0b"  # Naranja para Directos
+                                nombre_traza = "CMV - Directos"
+                            else:
+                                color_linea = "#fa0909"  # Naranja por defecto si muestra todos
+                                nombre_traza = "CMV (Todos)"
                         
                         # Agregamos la capa de vectores al mapa
                         fig.add_trace(go.Scattergeo(
                             lon = lons_lineas, lat = lats_lineas,
                             mode = 'lines',
-                            name = f"Flujos {tipo_mov}",
+                            name=nombre_traza,
                             line = dict(width = 2, color = color_linea),
                             opacity = 0.6,
                             hoverinfo = 'text',
