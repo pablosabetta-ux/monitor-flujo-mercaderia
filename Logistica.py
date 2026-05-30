@@ -781,27 +781,27 @@ if archivo_cargado is not None:
                         # Al aislar terceros, ocultamos tránsitos internos para limpiar por completo la red R16a
                         df_mapa_filtrado = df_mapa_filtrado[(df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero'])]
                     
-                    # ==================================================================
-                    # 🟢 BLOQUE DE DEBUGGER LOGÍSTICO (Temporal para Auditoría)
-                    # ==================================================================
-                    with st.expander("🔍 PANEL DE CONTROL & DEBUG (Auditoría de Datos del Mapa)"):
-                        st.write("### 🛠️ Diagnóstico del Flujo Base")
-                        
-                        # 1. Validamos el estado del DataFrame que sale del bucle de extracción
-                        if 'df_flujo_mapa' in locals() and not df_flujo_mapa.empty:
-                            st.success(f"✅ Se capturaron **{len(df_flujo_mapa)} filas** con coordenadas válidas para el mapa.")
+                        # ==================================================================
+                        # 🟢 PANEL DE DEBUG DINÁMICO (Ubicación Correcta Post-Filtro)
+                        # ==================================================================
+                        with st.expander("🔍 PANEL DE CONTROL & DEBUG (Auditoría en Tiempo Real)"):
+                            st.write(f"### 🎯 Estado actual del filtro lateral: **{tipo_despacho}**")
                             
-                            # Conteo de documentos R16a disponibles en la selección actual
-                            conteo_estados = df_flujo_mapa['ESTADO'].value_counts()
-                            st.write("**Conteo de filas por tipo de documento (ESTADO):**")
-                            st.dataframe(conteo_estados)
+                            st.metric(label="Filas que pasan al mapa de Plotly", value=len(df_mapa_render))
                             
-                            # Muestra de las primeras filas para verificar Origen y Destino traducidos
-                            st.write("**Muestra de tramos procesados (Primeras 5 filas):**")
-                            st.dataframe(df_flujo_mapa[['Origen', 'Destino', 'TP', 'Kilos', 'ESTADO']].head(5))
-                        else:
-                            st.error("❌ El DataFrame `df_flujo_mapa` está COMPLETAMENTE VACÍO antes de los filtros.")
-                            st.info("💡 Esto significa que las localidades u orígenes no están cruzando con el diccionario `COORDENADAS` o que `df_filtrado` no tiene datos.")
+                            if df_mapa_render.empty:
+                                st.error("❌ Los datos se redujeron a 0 filas para esta combinación de filtros.")
+                                st.info("💡 Sugerencia: Verificá si el Artículo seleccionado tiene movimientos con 'ESTADO' igual a 'R16a' en este mes.")
+                            else:
+                                st.success(f"✅ Mostrando los primeros registros listos para graficar:")
+                                # Conteo para auditar qué tipos de documentos están sobreviviendo
+                                st.write("**Resumen por tipo de comprobante (ESTADO):**")
+                                st.dataframe(df_mapa_render['ESTADO'].value_counts())
+                                
+                                st.write("**Muestra de Tramos (Primeras 10 filas):**")
+                                st.dataframe(df_mapa_render[['Origen', 'Destino', 'TP', 'Kilos', 'ESTADO']].head(10))
+                        st.markdown("---")
+                        # ==================================================================
 
                         # 2. Simulamos el impacto del filtro seleccionado en la barra lateral
                         st.write("---")
