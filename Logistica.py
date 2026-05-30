@@ -424,6 +424,17 @@ if archivo_cargado is not None:
                         else:
                             orig, dest = dep, "CLIENTE (VENTA)"
                     
+                        # 🟢 INYECCIÓN DE MONITOREO EN CONSOLA (Temporal)
+                        if "HUMBOLDT" in dep_upper or "SORGO" in str(row.get('NomArticulo', '')).upper():
+                            print("=" * 60)
+                            print(f"🔄 PROCESANDO FILA DE CONTROL - Índice Excel: {idx}")
+                            print(f"  🔹 DEPOSITO (Excel): '{dep}' -> Estandarizado: '{dep_upper}'")
+                            print(f"  🔹 NOMBRE (Excel):   '{remito}' -> Estandarizado: '{remito_upper}'")
+                            print(f"  🔹 ESTADO (Excel):   '{estado_doc}'")
+                            print(f"  🔹 Cruce Clientes:   Localidad recuperada -> '{dict_remitos_localidad.get(remito_upper, 'NO ENCONTRADO')}'")
+                            print(f"  👉 RESULTADO MAPA -> Origen: '{orig}' | Destino: '{dest}'")
+                            print("=" * 60)
+
                 elif tp == 'PRODUCC': 
                     orig, dest = ("LINEA PROCESO (VIRT.)", dep) if kg > 0 else (dep, "LINEA PROCESO (VIRT.)")
                 
