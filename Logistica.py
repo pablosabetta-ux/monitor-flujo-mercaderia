@@ -118,6 +118,27 @@ if archivo_cargado is not None:
         df_base, COORDENADAS, clientes_dict = cargar_y_procesar(archivo_cargado)
         geojson_provincias = obtener_geojson_provincias()
 
+        # ==================================================================
+        # 🌐 CONSTRUCCIÓN DE DICCIONARIOS GLOBALES (Disponibles para todo el script)
+        # ==================================================================
+        dict_remitos_localidad = {}
+        try:
+            df_clientes = pd.read_excel(archivo_cargado, sheet_name="CLIENTES")
+            df_clientes.columns = df_clientes.columns.str.strip()
+            
+            # Convertimos a string y limpiamos para asegurar el cruce perfecto de los remitos
+            if 'NOMBRE' in df_clientes.columns and 'LOCALIDAD' in df_clientes.columns:
+                df_clientes['NOMBRE_Clean'] = df_clientes['NOMBRE'].astype(str).str.strip().str.upper()
+                dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD'].astype(str).str.strip()))
+        except Exception as e:
+            st.warning(f"⚠️ No se pudo procesar la hoja 'CLIENTES' o falta la columna 'LOCALIDAD'. Error: {e}")
+
+        #transito_por_lote = {}
+        #if df_transito is not None and 'NroLote' in df_transito.columns and 'LOCALIDAD' in df_transito.columns:
+        #    transito_por_lote = dict(zip(
+        #        df_transito['NroLote'].astype(str).str.upper().str.strip(),
+        #        df_transito['LOCALIDAD'].astype(str).str.upper().str.strip()
+        #    ))
 
         # ==================================================================
         # 2. MENÚ PRINCIPAL Y BARRA LATERAL (CONTROL DE PANTALLAS)
@@ -821,7 +842,6 @@ if archivo_cargado is not None:
                         st.write("---")
                         st.write(f"### 🎯 Impacto del Filtro Lateral: **{tipo_despacho}**")
 
-
                     # Consolidamos y agrupamos los flujos finales manteniendo la bandera de terceros
                     df_flujo_mapa = df_mapa_filtrado.groupby(['Origen', 'Destino', 'TP', 'Es_Tercero'], as_index=False)['Kilos'].sum()
                     
@@ -959,19 +979,20 @@ if archivo_cargado is not None:
             """)
 
             dias_ventana = st.slider("Ventana de días para agrupar viajes cercanos:", min_value=1, max_value=7, value=3)
-            
+
+
             # --- CARGA DINÁMICA DE LA HOJA DE CLIENTES (Puente por campo 'NOMBRE') ---
-            dict_remitos_localidad = {}
-            try:
-                df_clientes = pd.read_excel(archivo_cargado, sheet_name="CLIENTES")
-                df_clientes.columns = df_clientes.columns.str.strip()
-                
-                # Convertimos a string y limpiamos para asegurar el cruce perfecto de los remitos
-                if 'NOMBRE' in df_clientes.columns and 'LOCALIDAD' in df_clientes.columns:
-                    df_clientes['NOMBRE_Clean'] = df_clientes['NOMBRE'].astype(str).str.strip().str.upper()
-                    dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD'].astype(str).str.strip()))
-            except Exception as e:
-                st.warning(f"⚠️ No se pudo procesar la hoja 'CLIENTES' o falta la columna 'LOCALIDAD'. Error: {e}")
+            #dict_remitos_localidad = {}
+            #try:
+            #    df_clientes = pd.read_excel(archivo_cargado, sheet_name="CLIENTES")
+            #    df_clientes.columns = df_clientes.columns.str.strip()
+            #    
+            #    # Convertimos a string y limpiamos para asegurar el cruce perfecto de los remitos
+            #    if 'NOMBRE' in df_clientes.columns and 'LOCALIDAD' in df_clientes.columns:
+            #       df_clientes['NOMBRE_Clean'] = df_clientes['NOMBRE'].astype(str).str.strip().str.upper()
+            #       dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD'].astype(str).str.strip()))
+            #except Exception as e:
+            #    st.warning(f"⚠️ No se pudo procesar la hoja 'CLIENTES' o falta la columna 'LOCALIDAD'. Error: {e}")
 
             # Función auxiliar para calcular distancias entre puntos (Fórmula de Haversine)
             def calcular_distancia_km(ponto1, ponto2):
