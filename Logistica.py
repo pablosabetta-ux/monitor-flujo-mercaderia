@@ -401,13 +401,23 @@ if archivo_cargado is not None:
                 if estado_doc == "R16a":
                     # Si es Despacho de Tercero (R16a):
                     # El ORIGEN real es la localidad física del Tercero (que el script extrae del diccionario de clientes/remitos)
-                    orig = dict_remitos_localidad.get(remito_upper, dep_upper)
-                    
+                    orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
+
                     # El DESTINO real es el cliente final. 
                     # NOTA: Si en tu Excel la columna 'NOMBRE' es el nombre del tercero (ej. Cereales Quemú) 
                     # y no tenés el cliente final en otra columna, hacemos que el destino sea el mismo punto 
                     # o una zona de influencia para que el nodo quede activo correctamente.
-                    dest = f"CLIENTE - {orig}" # O podés usar otra columna si la tenés (ej. row['CLIENTE_FINAL'])
+
+                    # 2. El DESTINO real es la localidad que recuperamos desde la solapa CLIENTES
+                    # Usamos 'remito_upper' (que tiene el código CLI_...) para consultar tu diccionario
+                    localidad_cliente = dict_remitos_localidad.get(remito_upper, "")
+
+                    if localidad_cliente:
+                        dest = localidad_cliente  # <-- ¡Acá toma "OLAVARRIA, BUENOS AIRES"!
+                    else:
+                        # Resguardo por si el remito no figura en la hoja CLIENTES
+                        dest = f"ZONA {orig}"
+
                 else:
                     # Si es despacho directo estándar o tránsito:
                     orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
