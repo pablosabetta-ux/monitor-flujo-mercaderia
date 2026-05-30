@@ -828,12 +828,10 @@ if archivo_cargado is not None:
                     if lats_nodos:
                         fig.add_trace(go.Scattergeo(
                             lon=lons_nodos, lat=lats_nodos,
-                            mode='markers+text',
+                            mode='markers',
                             name="Puntos Operativos Activos",
                             marker=dict(size=tamaños_nodos, color='#2ecc71', line=dict(width=1.5, color='black')),
                             text=nombres_nodos,
-                            textposition="top center",  # Ubica el texto arriba del punto verde (puede ser "top right", "bottom center", etc.)
-                            textfont=dict(family="Arial", size=11, color="white"), # Estética legible sobre fondo oscuro
                             hoverinfo='text'
                         ))
                         
