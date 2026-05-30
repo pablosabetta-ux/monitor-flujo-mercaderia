@@ -415,7 +415,9 @@ if archivo_cargado is not None:
                     orig_u = orig.upper()
                     dest_u = dest.upper()
                     kg_abs = abs(kg)
-                    orig_dest_mapa.append({'Origen': orig_u, 'Destino': dest_u, 'Kilos': kg_abs, 'TP': tp})
+                    estado_fila = str(row['ESTADO']).strip() if 'ESTADO' in df_filtrado.columns else ""
+
+                    orig_dest_mapa.append({'Origen': orig_u, 'Destino': dest_u, 'Kilos': kg_abs, 'TP': tp,'ESTADO': estado_fila})
                     volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
                     volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
 
@@ -759,6 +761,24 @@ if archivo_cargado is not None:
                     
                     fig = go.Figure()
                     
+                    # Creamos una columna booleana para identificar los despachos de terceros de manera directa
+                    if 'ESTADO' in df_flujo_mapa.columns:
+                        df_flujo_mapa['Es_Tercero'] = df_flujo_mapa['ESTADO'] == "R16a"
+                    else:
+                        df_flujo_mapa['Es_Tercero'] = False
+                    
+                    # Aplicamos el filtro de la barra lateral directamente sobre la base de datos del mapa
+                    df_mapa_filtrado = df_flujo_mapa.copy()
+
+                    if tipo_despacho == "Despachos Directos":
+                        df_mapa_filtrado = df_mapa_filtrado[~((df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero']))]
+                    elif tipo_despacho == "Despachos de Terceros":
+                        # Al aislar terceros, ocultamos tránsitos internos para limpiar por completo la red R16a
+                        df_mapa_filtrado = df_mapa_filtrado[(df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero'])]
+                    
+                    # Consolidamos y agrupamos los flujos finales manteniendo la bandera de terceros
+                    df_flujo_mapa = df_mapa_filtrado.groupby(['Origen', 'Destino', 'TP', 'Es_Tercero'], as_index=False)['Kilos'].sum()
+                    
                     # Agrupamos por Tipo de Movimiento para crear capas independientes en la leyenda
                     for tipo_mov in df_flujo_mapa['TP'].unique():
                         df_tipo = df_flujo_mapa[df_flujo_mapa['TP'] == tipo_mov]
@@ -771,23 +791,8 @@ if archivo_cargado is not None:
                             orig = row['Origen']
                             dest = row['Destino']
                             kilos = row['Kilos']
-
-                            # --- NUEVA LÓGICA DE FILTRADO DE TERCEROS (R16a) ---
-                            es_tercero = False
-                            if 'ESTADO' in df_base.columns:
-                                # Buscamos el estado original usando el índice de la fila mapeada
-                                val_estado = str(df_base.loc[idx, 'ESTADO']).strip()
-                                if val_estado == "R16a":
-                                    es_tercero = True
-
-                            # Filtramos según la opción elegida en la barra lateral
-                            if tipo_mov == "CMV":
-                                if tipo_despacho == "Despachos Directos" and es_tercero:
-                                    continue
-                                if tipo_despacho == "Despachos de Terceros" and not es_tercero:
-                                    continue
-                            # ---------------------------------------------------    
-                        
+                            es_tercero_linea = row['Es_Tercero']
+                      
                             if orig in COORDENADAS and dest in COORDENADAS:
                                 c_orig = COORDENADAS[orig]
                                 c_dest = COORDENADAS[dest]
@@ -813,17 +818,17 @@ if archivo_cargado is not None:
                                 lons_lineas.append(None)
                                 
                                 # Texto informativo para cuando pases el mouse por la ruta
-                                textos_hover.append(f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}")
+                                tag_txt = " (Tercero)" if es_tercero_linea else " (Directo)"
+                                textos_hover.append(f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}{tag_txt}")
 
                         # Definición de colores estratégicos por tipo de flujo
                         color_linea = "#1707f0" if tipo_mov == "TRANSITO" else "#a4e905"
                         nombre_traza = f"Flujos {tipo_mov}"
-                        #if tipo_mov == "CMV": color_linea = "#e4130c" # Naranja para ventas comerciales
 
                         if tipo_mov == "CMV":
                             if tipo_despacho == "Despachos de Terceros":
                                 color_linea = "#ece905"  # Púrpura para Terceros
-                                nombre_traza = "CMV - Terceros (R16a)"
+                                nombre_traza = "CMV - Terceros"
                             elif tipo_despacho == "Despachos Directos":
                                 color_linea = "#f70b0b"  # Naranja para Directos
                                 nombre_traza = "CMV - Directos"
@@ -858,7 +863,7 @@ if archivo_cargado is not None:
                             
                             # El tamaño responde de forma real a los kilos calculados (sin duplicar)
                             kg_real = volumen_por_localidad.get(nodo_upper, 0)
-                            tamaño_dinamico = max(8, min(25, int(kg_real / 25000))) if kg_real > 0 else 8
+                            tamaño_dinamico = max(8, min(25, int(kg_real / 30000)+8)) if kg_real > 0 else 8
                             tamaños_nodos.append(tamaño_dinamico)
 
                     if lats_nodos:
