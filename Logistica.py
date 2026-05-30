@@ -356,10 +356,10 @@ if archivo_cargado is not None:
             transito_por_lote = dict(zip(ingresos_t['Lote_Clean'], ingresos_t['DEPOSITO']))
 
             for idx, row in df_filtrado.iterrows():
-                tp = row['TP']
-                dep = row['DEPOSITO'].upper()
+                tp = row['TP'].strip()
+                dep = row['DEPOSITO'].strip().upper()
                 # Limpiamos el lote actual de la fila de la misma manera exacta
-                lote_actual = row['NroLote'].upper()
+                lote_actual = row['NroLote'].strip().upper()
 
                 if tp in ["SIN_TP", "FIN", "INI"] or dep in ["#N/A", "N/A", "NAN"]:
                 #if tp in ["SIN_TP", "FIN"] or dep in ["#N/A", "N/A", "NAN"]:
@@ -371,7 +371,7 @@ if archivo_cargado is not None:
                 # --- NUEVA LÓGICA DE ORIGEN DINÁMICO (Traducción por Depósito/Tercero) ---
                 # En lugar de tomar el código crudo de 'DEPOSITO', buscamos su Localidad Real
                 # Si el depósito existe en el diccionario geográfico, usamos su ubicación; si no, dejamos el nombre original
-                dep_upper = dep.upper()
+                dep_upper = dep.upper().strip()
                 orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
 
                 if tp in ['FOB']:
@@ -417,8 +417,8 @@ if archivo_cargado is not None:
                     orig, dest = ("AJUSTES DE INVENTARIO", dep) if kg > 0 else (dep, "AJUSTES DE INVENTARIO")
 
                 if orig and dest:
-                    orig_u = orig.upper()
-                    dest_u = dest.upper()
+                    orig_u = orig.upper().strip()
+                    dest_u = dest.upper().strip()
                     kg_abs = abs(kg)
                     estado_fila = str(row['ESTADO']).strip() if 'ESTADO' in df_filtrado.columns else ""
 
@@ -793,8 +793,8 @@ if archivo_cargado is not None:
                         textos_hover = []
                         
                         for idx, row in df_tipo.iterrows():
-                            orig = row['Origen'].upper().strip()
-                            dest = row['Destino'].upper().strip()
+                            orig = str(row['Origen'].upper().strip())
+                            dest = str(row['Destino'].upper().strip())
                             kilos = row['Kilos']
                             es_tercero_linea = row['Es_Tercero']
                       
