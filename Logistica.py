@@ -360,20 +360,32 @@ if archivo_cargado is not None:
                 dep = row['DEPOSITO'].strip().upper()
                 # Limpiamos el lote actual de la fila de la misma manera exacta
                 lote_actual = row['NroLote'].strip().upper()
+                remito = str(row['NOMBRE']).strip() if 'NOMBRE' in df_filtrado.columns else ""
+                estado_doc = str(row.get('ESTADO', '')).strip()
+                kg = float(row['Cantidad'])
 
-                if tp in ["SIN_TP", "FIN", "INI"] or dep in ["#N/A", "N/A", "NAN"]:
+                if tp in ["SIN_TP", "FIN", "INI"] or dep in ["#N/A", "N/A", "NAN"] or remito in ["NAN", ""]:
                 #if tp in ["SIN_TP", "FIN"] or dep in ["#N/A", "N/A", "NAN"]:
                     continue            
-            
-                kg = float(row['Cantidad'])
+                            
                 orig, dest = None, None
-                
-                # --- NUEVA LÓGICA DE ORIGEN DINÁMICO (Traducción por Depósito/Tercero) ---
-                # En lugar de tomar el código crudo de 'DEPOSITO', buscamos su Localidad Real
-                # Si el depósito existe en el diccionario geográfico, usamos su ubicación; si no, dejamos el nombre original
                 dep_upper = dep.upper().strip()
-                orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
+                remito_upper = remito.upper().strip()
 
+                if estado_doc == "R16a":
+                    # Si es Despacho de Tercero (R16a):
+                    # El ORIGEN real es la localidad física del Tercero (que el script extrae del diccionario de clientes/remitos)
+                    orig = dict_remitos_localidad.get(remito_upper, dep_upper)
+                    
+                    # El DESTINO real es el cliente final. 
+                    # NOTA: Si en tu Excel la columna 'NOMBRE' es el nombre del tercero (ej. Cereales Quemú) 
+                    # y no tenés el cliente final en otra columna, hacemos que el destino sea el mismo punto 
+                    # o una zona de influencia para que el nodo quede activo correctamente.
+                    dest = f"CLIENTE - {orig}" # O podés usar otra columna si la tenés (ej. row['CLIENTE_FINAL'])
+                else:
+                    # Si es despacho directo estándar o tránsito:
+                    orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
+                
                 if tp in ['FOB']:
                     orig, dest = "Proveedor Ext.", dep
                 elif tp == 'CPRA':
@@ -420,9 +432,15 @@ if archivo_cargado is not None:
                     orig_u = orig.upper().strip()
                     dest_u = dest.upper().strip()
                     kg_abs = abs(kg)
-                    estado_fila = str(row['ESTADO']).strip() if 'ESTADO' in df_filtrado.columns else ""
 
-                    orig_dest_mapa.append({'Origen': orig_u, 'Destino': dest_u, 'Kilos': kg_abs, 'TP': tp,'ESTADO': estado_fila})
+                    orig_dest_mapa.append({
+                        'Origen': orig_u,
+                        'Destino': dest_u,
+                        'Kilos': kg_abs,
+                        'TP': tp,
+                        'ESTADO': estado_doc
+                    })
+                    
                     volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
                     volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
 
