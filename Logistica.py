@@ -787,19 +787,15 @@ if archivo_cargado is not None:
                         with st.expander("🔍 PANEL DE CONTROL & DEBUG (Auditoría en Tiempo Real)"):
                             st.write(f"### 🎯 Estado actual del filtro lateral: **{tipo_despacho}**")
                             
-                            st.metric(label="Filas que pasan al mapa de Plotly", value=len(df_mapa_render))
+                            st.metric(label="Filas que pasan al mapa de Plotly", value=len(df_mapa_filtrado))
                             
-                            if df_mapa_render.empty:
-                                st.error("❌ Los datos se redujeron a 0 filas para esta combinación de filtros.")
-                                st.info("💡 Sugerencia: Verificá si el Artículo seleccionado tiene movimientos con 'ESTADO' igual a 'R16a' en este mes.")
-                            else:
-                                st.success(f"✅ Mostrando los primeros registros listos para graficar:")
-                                # Conteo para auditar qué tipos de documentos están sobreviviendo
-                                st.write("**Resumen por tipo de comprobante (ESTADO):**")
-                                st.dataframe(df_mapa_render['ESTADO'].value_counts())
-                                
-                                st.write("**Muestra de Tramos (Primeras 10 filas):**")
-                                st.dataframe(df_mapa_render[['Origen', 'Destino', 'TP', 'Kilos', 'ESTADO']].head(10))
+                            st.success(f"✅ Mostrando los primeros registros listos para graficar:")
+                            # Conteo para auditar qué tipos de documentos están sobreviviendo
+                            st.write("**Resumen por tipo de comprobante (ESTADO):**")
+                            st.dataframe(df_mapa_filtrado['ESTADO'].value_counts())
+                            
+                            st.write("**Muestra de Tramos (Primeras 10 filas):**")
+                            st.dataframe(df_mapa_filtrado[['Origen', 'Destino', 'TP', 'Kilos', 'ESTADO']].head(10))
                         st.markdown("---")
                         # ==================================================================
 
