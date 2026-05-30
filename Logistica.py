@@ -487,8 +487,9 @@ if archivo_cargado is not None:
                     elif not existe_destino:
                         estado_validacion = f"❌ ERROR: Destino '{dest_u}' no encontrado en COORDENADAS"
 
-                    localidad_clie = COORDENADAS[dest_u].get(dest_u) if existe_destino else "N/A"
-                    
+                    dato_clie = COORDENADAS[dest_u].get('display_name', dest_u) if existe_destino else "N/A"
+                    localidad_clie = COORDENADAS[dest_u].get('localidad', 'N/A') if existe_destino else "N/A"
+
                     rastro_coordenadas_debug.append({
                         'Fila_Excel': idx,
                         'Producto': str(row.get('NomArticulo', 'S/D')),
@@ -498,6 +499,7 @@ if archivo_cargado is not None:
                         'Kilos': kg_abs,
                         'Estado_Doc': estado_doc,
                         'Resultado_Validacion': estado_validacion,
+                        'Display_Name_Destino': dato_clie,
                         'Localidad Clie': localidad_clie
                     })
 #----------------------------------------------
@@ -738,6 +740,7 @@ if archivo_cargado is not None:
                                     COORDENADAS[d_name] = {
                                         "lat": clientes_dict[id_cliente_limpio]['lat'],
                                         "lon": clientes_dict[id_cliente_limpio]['lon'],
+                                        "localidad": clientes_dict[id_cliente_limpio]['localidad'].upper().strip(),
                                         "display_name": f"Cliente: {id_cliente_limpio} ({clientes_dict[id_cliente_limpio]['localidad']})"
                                     }
 
