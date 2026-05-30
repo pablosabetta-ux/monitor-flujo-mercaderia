@@ -4,6 +4,15 @@ import plotly.graph_objects as go
 import time
 import requests
 import numpy as np
+import unicodedata
+
+def normalizar_texto(texto):
+    """Quita tildes, espacios extra y pasa a mayúsculas de forma segura"""
+    if not isinstance(texto, str):
+        return ""
+    # Descompone los caracteres acentuados (ej: Á -> A + tilde) y elimina la tilde
+    texto_limpio = "".join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
+    return texto_limpio.upper().strip()
 
 # Configuración de la página de Streamlit
 st.set_page_config(layout="wide", page_title="Análisis de Ineficiencias Logísticas")
@@ -385,8 +394,8 @@ if archivo_cargado is not None:
                     continue            
                             
                 orig, dest = None, None
-                dep_upper = dep.upper().strip()
-                remito_upper = remito.upper().strip()
+                dep_upper = normalizar_texto(dep.upper().strip())
+                remito_upper = normalizar_texto(remito.upper().strip())
 
                 if estado_doc == "R16a":
                     # Si es Despacho de Tercero (R16a):
@@ -460,8 +469,8 @@ if archivo_cargado is not None:
                     orig, dest = ("AJUSTES DE INVENTARIO", dep) if kg > 0 else (dep, "AJUSTES DE INVENTARIO")
 
                 if orig and dest:
-                    orig_u = orig.upper().strip()
-                    dest_u = dest.upper().strip()
+                    orig_u = normalizar_texto(orig.upper().strip())
+                    dest_u = normalizar_texto(dest.upper().strip())
                     kg_abs = abs(kg)
 
                     orig_dest_mapa.append({
