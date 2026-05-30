@@ -878,7 +878,8 @@ if archivo_cargado is not None:
                                 
                                 # Texto informativo para cuando pases el mouse por la ruta
                                 tag_txt = " (Tercero)" if es_tercero_linea else " (Directo)"
-                                textos_hover.append(f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}{tag_txt}")
+                                info_linea = f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}{tag_txt}"
+                                textos_hover.append(info_linea)
 
                         # Definición de colores estratégicos por tipo de flujo
                         color_linea = "#1707f0" if tipo_mov == "TRANSITO" else "#a4e905"
@@ -899,9 +900,8 @@ if archivo_cargado is not None:
                         fig.add_trace(go.Scattergeo(
                             lon = lons_lineas, lat = lats_lineas,
                             mode = 'lines',
-                            name=nombre_traza,
+                            name=nombre_traza & info_linea,
                             line = dict(width = 2, color = color_linea),
-                            symbol = "triangle-up" if tipo_mov == "TRANSITO" else "diamond",
                             opacity = 0.6,
                             hoverinfo = 'text',
                             text = textos_hover
