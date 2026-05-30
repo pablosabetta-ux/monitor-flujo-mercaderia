@@ -489,6 +489,9 @@ if archivo_cargado is not None:
 
                     dato_clie = COORDENADAS[dest_u].get('display_name', dest_u) if existe_destino else "N/A"
                     localidad_clie = COORDENADAS[dest_u].get('localidad', 'N/A') if existe_destino else "N/A"
+                    Lat_clie = COORDENADAS[dest_u].get('latitud', 'N/A') if existe_destino else "N/A"
+                    Long_clie = COORDENADAS[dest_u].get('longitud', 'N/A') if existe_destino else "N/A"
+                    Lat_Long= f"Lat: {Lat_clie}, Long: {Long_clie}" if existe_destino else "N/A"
 
                     rastro_coordenadas_debug.append({
                         'Fila_Excel': idx,
@@ -500,7 +503,8 @@ if archivo_cargado is not None:
                         'Estado_Doc': estado_doc,
                         'Resultado_Validacion': estado_validacion,
                         'Display_Name_Destino': dato_clie,
-                        'Localidad Clie': localidad_clie
+                        'Localidad Clie': localidad_clie,
+                        'Lat_Long_Destino': Lat_Long
                     })
 #----------------------------------------------
                     orig_dest_mapa.append({
