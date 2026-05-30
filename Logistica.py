@@ -365,6 +365,7 @@ if archivo_cargado is not None:
 
             orig_dest_mapa = []
             volumen_por_localidad = {}
+            rastro_coordenadas_debug = []
 
             # ==================================================================
             # 1. PREPARACIÓN ULTRA-ESTRICTA DE TRÁNSITOS (LOTE COMPLETO)
@@ -472,6 +473,43 @@ if archivo_cargado is not None:
                     orig_u = normalizar_texto(orig.upper().strip())
                     dest_u = normalizar_texto(dest.upper().strip())
                     kg_abs = abs(kg)
+#---------------------------------------DEBUG
+
+                # Verificamos si existen en el diccionario para el mapa
+                existe_origen = orig_u in COORDENADAS
+                existe_destino = dest_u in COORDENADAS
+
+                # 🔍 GUARDAMOS EL ESTADO DE DEBUG (Pasó o por qué falló)
+                estado_validacion = "APROBADO ✅"
+                if not existe_origen and not existe_destino:
+                    estado_validacion = "❌ ERROR: Ni Origen ni Destino existen en COORDENADAS"
+                elif not existe_origen:
+                    estado_validacion = f"❌ ERROR: Origen '{orig_u}' no encontrado en COORDENADAS"
+                elif not existe_destino:
+                    estado_validacion = f"❌ ERROR: Destino '{dest_u}' no encontrado en COORDENADAS"
+
+                rastro_coordenadas_debug.append({
+                    'Fila_Excel': idx,
+                    'Producto': str(row.get('NomArticulo', 'S/D')),
+                    'Nro_Remito_Cuenta': remito,
+                    'Origen_Normalizado': orig_u,
+                    'Destino_Normalizado': dest_u,
+                    'Kilos': kg_abs,
+                    'Estado_Doc': estado_doc,
+                    'Resultado_Validacion': estado_validacion
+                })
+
+
+
+
+
+
+
+#----------------------------------------------
+
+
+
+
 
                     orig_dest_mapa.append({
                         'Origen': orig_u,
@@ -861,6 +899,21 @@ if archivo_cargado is not None:
                                 df_rastro = pd.DataFrame(rastro_auditoria)
                                 st.dataframe(df_rastro, use_container_width=True)
     
+                            if 'rastro_coordenadas_debug' in locals() and rastro_coordenadas_debug:
+                                st.write("### 🌍 Auditoría Geográfica de Rutas (Filtro Plotly)")
+                                st.write("Esta tabla te muestra qué registros de la base cruzaron con éxito el diccionario de coordenadas y cuáles fueron rechazados:")
+                                
+                                df_debug_geo = pd.DataFrame(rastro_coordenadas_debug)
+                                
+                                # Buscador rápido dentro del debug para filtrar errores
+                                filtro_error = st.checkbox("Mostrar solo filas con errores de coordenadas", value=False)
+                                if filtro_error:
+                                    df_debug_geo = df_debug_geo[df_debug_geo['Resultado_Validacion'].str.contains("❌")]
+                                
+                                st.dataframe(df_debug_geo, use_container_width=True, hide_index=True)
+                            else:
+                                st.info("No hay datos de auditoría geográfica procesados.")
+
                             st.markdown("---")
                         # ==================================================================
 
