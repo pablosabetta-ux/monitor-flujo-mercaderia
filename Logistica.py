@@ -147,7 +147,8 @@ if archivo_cargado is not None:
             dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD_Clean']))
 
             # 2. Diccionario para buscar Coordenadas usando el texto de la localidad limpia
-            dict_coordenadas_clientes = df_clientes.set_index('LOCALIDAD_Clean')[['LAT', 'LONG']].to_dict(orient='index')
+            df_geo_unico = df_clientes.drop_duplicates(subset=['LOCALIDAD_Clean']).set_index('LOCALIDAD_Clean')
+            dict_coordenadas_clientes = df_geo_unico[['LAT', 'LONG']].to_dict(orient='index')
 
             # Convertimos a string y limpiamos para asegurar el cruce perfecto de los remitos
             #if 'NOMBRE' in df_clientes.columns and 'LOCALIDAD' in df_clientes.columns:
@@ -381,6 +382,7 @@ if archivo_cargado is not None:
             orig_dest_mapa = []
             volumen_por_localidad = {}
             rastro_coordenadas_debug = []
+            rastro_auditoria = []
 
             # ==================================================================
             # 1. PREPARACIÓN ULTRA-ESTRICTA DE TRÁNSITOS (LOTE COMPLETO)
@@ -394,7 +396,10 @@ if archivo_cargado is not None:
             # Creamos el diccionario de parejas: Clave = Lote Limpio -> Valor = Depósito Destino
             transito_por_lote = dict(zip(ingresos_t['Lote_Clean'], ingresos_t['DEPOSITO']))
 
-            rastro_auditoria = []
+            if 'dict_coordenadas_clientes' not in locals():
+                dict_coordenadas_clientes = {}
+            if 'dict_remitos_localidad' not in locals():
+                dict_remitos_localidad = {}
 
             for idx, row in df_filtrado.iterrows():
                 tp = row['TP'].strip()
