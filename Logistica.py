@@ -433,7 +433,7 @@ if archivo_cargado is not None:
                             COORDENADAS[dest] = {
                                 "lat": clientes_dict[id_cliente]['lat'],
                                 "lon": clientes_dict[id_cliente]['lon'],
-                                "display_name": f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad']})"
+                                "display_name": f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad'].upper()})",
                             }
                         else:
                             orig, dest = dep, "CLIENTE (VENTA)"
