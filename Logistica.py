@@ -432,28 +432,27 @@ if archivo_cargado is not None:
                         
                         # Evaluación del botón de comando de apertura
                         if apertura_cliente and (id_cliente in clientes_dict):
-                
                             if estado_doc == "R16a":
                                 # Si es Despacho de Tercero (R16a):
-                                # El ORIGEN real es la localidad física del Tercero (que el script extrae del diccionario de clientes/remitos)
                                 if dep_upper in COORDENADAS:
-                                    orig = COORDENADAS[dep_upper].get('display_name', dep) 
+                                    orig = COORDENADAS[dep_upper].get('display_name', dep)
                                 else:
                                     orig = dep
 
                                 localidad_cliente = dict_remitos_localidad.get(remito_upper, "")
 
                                 if localidad_cliente and str(localidad_cliente).upper() != "NAN":
-                                    dest = localidad_cliente  # El destino es la localidad (ej: "OLAVARRIA, BUENOS AIRES")
+                                    dest = normalizar_texto(localidad_cliente)
                                     localidad_display = localidad_cliente
-                                    
-                                    # 3. EXTRAER LAT Y LONG DE LA HOJA CLIENTES
-                                    # Buscamos en nuestro diccionario geográfico de clientes usando la localidad
                                     if localidad_cliente in dict_coordenadas_clientes:
                                         lat_dest_debug = dict_coordenadas_clientes[localidad_cliente]['LAT']
                                         lon_dest_debug = dict_coordenadas_clientes[localidad_cliente]['LONG']
+                                    COORDENADAS[dest] = {
+                                        "lat": clientes_dict[id_cliente]['lat'],
+                                        "lon": clientes_dict[id_cliente]['lon'],
+                                        "display_name": f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad'].upper()})",
+                                    }
                                 else:
-                                    # Resguardo por si el remito no figura en la hoja CLIENTES
                                     dest = f"ZONA {orig}"
                                     localidad_display = "SIN MASTR DE CLIENTE"
                             else:
@@ -462,21 +461,24 @@ if archivo_cargado is not None:
                                     orig = COORDENADAS[dep_upper].get('display_name', dep)
                                 else:
                                     orig = dep
-                                
-                            # Para los comunes, buscamos coordenadas en el diccionario estático de depósitos
-                            dest_norm = normalizar_texto(dest)
-                            if dest_norm in COORDENADAS:
-                                lat_dest_debug = COORDENADAS[dest_norm]['lat']
-                                lon_dest_debug = COORDENADAS[dest_norm]['lon']
-                                localidad_display = COORDENADAS[dest_norm].get('display_name', dest)
 
-                            COORDENADAS[dest] = {
-                                "lat": clientes_dict[id_cliente]['lat'],
-                                "lon": clientes_dict[id_cliente]['lon'],
-                                "display_name": f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad'].upper()})",
-                            }
+                                dest = normalizar_texto(clientes_dict[id_cliente]['localidad'])
+                                localidad_display = clientes_dict[id_cliente]['localidad'].upper().strip()
+                                COORDENADAS[dest] = {
+                                    "lat": clientes_dict[id_cliente]['lat'],
+                                    "lon": clientes_dict[id_cliente]['lon'],
+                                    "display_name": f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad'].upper()})",
+                                }
                         else:
                             orig, dest = dep, "CLIENTE (VENTA)"
+
+                    # Para los comunes, buscamos coordenadas en el diccionario estático de depósitos
+                    if dest:
+                        dest_norm = normalizar_texto(dest)
+                        if dest_norm in COORDENADAS:
+                            lat_dest_debug = COORDENADAS[dest_norm]['lat']
+                            lon_dest_debug = COORDENADAS[dest_norm]['lon']
+                            localidad_display = COORDENADAS[dest_norm].get('display_name', dest)
                     
                         # 🔍 Capturamos las variables crudas y procesadas de esta vuelta
                         rastro_auditoria.append({
