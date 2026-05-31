@@ -511,6 +511,12 @@ if archivo_cargado is not None:
                     orig_u = normalizar_texto(orig.upper().strip())
                     dest_u = normalizar_texto(dest.upper().strip())
                     kg_abs = abs(kg)
+
+                    if dest_u in COORDENADAS:
+                        lat_dest_debug = COORDENADAS[dest_u]['lat']
+                        lon_dest_debug = COORDENADAS[dest_u]['lon']
+                        localidad_display = COORDENADAS[dest_u].get('display_name', dest)
+
 #---------------------------------------DEBUG
                     # Verificamos si existen en el diccionario para el mapa
                     existe_origen = orig_u in COORDENADAS
