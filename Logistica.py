@@ -436,8 +436,7 @@ if archivo_cargado is not None:
                                 else:
                                     orig = dep
 
-                                llave_busqueda_cliente = str(remito).strip().upper()
-                                localidad_cliente = dict_remitos_localidad.get(llave_busqueda_cliente, "")
+                                localidad_cliente = dict_remitos_localidad.get(remito_upper, "")
 
                                 if localidad_cliente and str(localidad_cliente).upper() != "NAN":
                                     dest = localidad_cliente  # El destino es la localidad (ej: "OLAVARRIA, BUENOS AIRES")
@@ -454,9 +453,17 @@ if archivo_cargado is not None:
                                     localidad_display = "SIN MASTR DE CLIENTE"
                             else:
                                 # Si es despacho directo estándar o tránsito:
-                                #orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
-                                orig = dep
-                                dest=localidad_clie
+                                if dep_upper in COORDENADAS:
+                                    orig = COORDENADAS[dep_upper].get('display_name', dep)
+                                else:
+                                    orig = dep
+                                
+                            # Para los comunes, buscamos coordenadas en el diccionario estático de depósitos
+                            dest_norm = normalizar_texto(dest)
+                            if dest_norm in COORDENADAS:
+                                lat_dest_debug = COORDENADAS[dest_norm]['lat']
+                                lon_dest_debug = COORDENADAS[dest_norm]['lon']
+                                localidad_display = COORDENADAS[dest_norm].get('display_name', dest)
 
                             COORDENADAS[dest] = {
                                 "lat": clientes_dict[id_cliente]['lat'],
@@ -507,7 +514,8 @@ if archivo_cargado is not None:
 #---------------------------------------DEBUG
                     # Verificamos si existen en el diccionario para el mapa
                     existe_origen = orig_u in COORDENADAS
-                    existe_destino = dest_u in COORDENADAS
+                    #existe_destino = dest_u in COORDENADAS
+                    existe_destino = (lat_dest_debug != "N/A" and lat_dest_debug != 0)
 
                     # 🔍 GUARDAMOS EL ESTADO DE DEBUG (Pasó o por qué falló)
                     estado_validacion = f"APROBADO ✅ - Origen '{orig_u}' y Destino '{dest_u}' encontrados en COORDENADAS"
@@ -526,7 +534,6 @@ if archivo_cargado is not None:
 
                     rastro_coordenadas_debug.append({
                         'Fila_Excel': idx,
-                        #'Producto': str(row.get('NomArticulo', 'S/D')),
                         'Nro_Remito_Cuenta': remito,
                         'Origen': orig_u,
                         'Destino': dest_u,
@@ -534,18 +541,35 @@ if archivo_cargado is not None:
                         'Doc': estado_doc,
                         'Resultado_Validacion': estado_validacion,
                         'Display_Name_Destino': dato_clie,
-                        'Localidad Clie': localidad_clie,
+                        'Localidad Clie': localidad_display,
+                        'Latitud_Dest': lat_dest_debug,
+                        'Longitud_Dest': lon_dest_debug,
                         'Lat_Long_Destino': Lat_Long
                     })
 #----------------------------------------------
-                    orig_dest_mapa.append({
-                        'Origen': orig_u,
-                        'Destino': dest_u,
-                        'Kilos': kg_abs,
-                        'TP': tp,
-                        'ESTADO': estado_doc
-                    })
+                    #orig_dest_mapa.append({
+                    #    'Origen': orig_u,
+                    #    'Destino': dest_u,
+                    #    'Kilos': kg_abs,
+                    #    'TP': tp,
+                    #    'ESTADO': estado_doc
+                    #})
                     
+                    if existe_origen and existe_destino:
+                        orig_display = COORDENADAS[orig_u].get('display_name', orig)
+
+                        orig_dest_mapa.append({
+                                'Origen': orig_display.upper().strip(), 
+                                'Destino': str(dest).upper().strip(), 
+                                'Kilos': kg_abs,
+                                'TP': tp,
+                                'ESTADO': estado_doc,
+                                'LAT_ORIG': COORDENADAS[orig_u]['lat'],
+                                'LON_ORIG': COORDENADAS[orig_u]['lon'],
+                                'LAT_DEST': lat_dest_debug,
+                                'LON_DEST': lon_dest_debug
+                            })
+
                     volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
                     volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
 
