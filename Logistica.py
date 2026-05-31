@@ -411,10 +411,10 @@ if archivo_cargado is not None:
                 kg = float(row['Cantidad'])
 
                 if tp in ["SIN_TP", "FIN", "INI"] or dep in ["#N/A", "N/A", "NAN"] or remito in ["NAN", ""]:
-                #if tp in ["SIN_TP", "FIN"] or dep in ["#N/A", "N/A", "NAN"]:
                     continue            
                             
                 orig, dest = None, None
+                cliente_display = None
                 dep_upper = normalizar_texto(dep.upper().strip())
                 remito_upper = normalizar_texto(remito.upper().strip())
 
@@ -443,6 +443,7 @@ if archivo_cargado is not None:
 
                                 if localidad_cliente and str(localidad_cliente).upper() != "NAN":
                                     dest = normalizar_texto(localidad_cliente)
+                                    cliente_display = f"{id_cliente} ({localidad_cliente})"
                                     localidad_display = localidad_cliente
                                     if localidad_cliente in dict_coordenadas_clientes:
                                         lat_dest_debug = dict_coordenadas_clientes[localidad_cliente]['LAT']
@@ -454,6 +455,7 @@ if archivo_cargado is not None:
                                     }
                                 else:
                                     dest = f"ZONA {orig}"
+                                    cliente_display = f"{id_cliente}"
                                     localidad_display = "SIN MASTR DE CLIENTE"
                             else:
                                 # Si es despacho directo estándar o tránsito:
@@ -463,6 +465,7 @@ if archivo_cargado is not None:
                                     orig = dep
 
                                 dest = normalizar_texto(clientes_dict[id_cliente]['localidad'])
+                                cliente_display = f"{id_cliente} ({clientes_dict[id_cliente]['localidad']})"
                                 localidad_display = clientes_dict[id_cliente]['localidad'].upper().strip()
                                 COORDENADAS[dest] = {
                                     "lat": clientes_dict[id_cliente]['lat'],
@@ -564,6 +567,7 @@ if archivo_cargado is not None:
                         orig_dest_mapa.append({
                                 'Origen': orig_display.upper().strip(), 
                                 'Destino': str(dest).upper().strip(), 
+                                'Cliente': cliente_display if cliente_display else None,
                                 'Kilos': kg_abs,
                                 'TP': tp,
                                 'ESTADO': estado_doc,
@@ -744,7 +748,7 @@ if archivo_cargado is not None:
                     if df_flujo_mapa.empty:
                         st.info("No hay coordenadas o tramos activos para proyectar geográficamente.")
                     else:
-                        df_mapa_consolidado = df_flujo_mapa.groupby(['Origen', 'Destino', 'TP'], as_index=False)['Kilos'].sum()
+                        df_mapa_consolidado = df_flujo_mapa.groupby(['Origen', 'Destino', 'Cliente', 'TP'], as_index=False)['Kilos'].sum()
                         fig_mapa = go.Figure()
 
                         # A. DIBUJAR CONTORNOS PROVINCIALES CON GEOJSON (SI ESTÁ DISPONIBLE)
@@ -820,6 +824,8 @@ if archivo_cargado is not None:
                             color_linea = '#FFCC00' if tipo_p == 'CMV' else 'cyan'
                             
                             # Línea vectorizada entre Origen y Destino
+                            cliente_line = f"<br>Cliente: {row.get('Cliente', 'N/A')}" if row.get('Cliente') else ''
+                            texto_linea = f"Tramo: {o_name} ➡️ {d_name}<br>Volumen: {row['Kilos']:,.0f} Kg ({tipo_p}){cliente_line}"
                             fig_mapa.add_trace(go.Scattergeo(
                                     lon = [coord_orig['lon'], coord_dest['lon']],
                                     lat = [coord_orig['lat'], coord_dest['lat']],
@@ -827,7 +833,7 @@ if archivo_cargado is not None:
                                     line = dict(width = grosor, color = color_linea),
                                     #marker = dict(size = 4, color = 'orange'),
                                     hoverinfo = 'text',
-                                    text = f"Tramo: {o_name} ➡️ {d_name}<br>Volumen: {row['Kilos']:,.0f} Kg ({tipo_p})",
+                                    text = texto_linea,
                                     showlegend = False
                                 ))
                             
@@ -897,6 +903,10 @@ if archivo_cargado is not None:
 
                     st.markdown("##### Resumen de Tramos Geográficos")
                     df_tabla_geo = df_mapa_consolidado.copy()
+                    if 'Cliente' in df_tabla_geo.columns:
+                        df_tabla_geo = df_tabla_geo[['Origen', 'Destino', 'Cliente', 'TP', 'Kilos']]
+                    else:
+                        df_tabla_geo = df_tabla_geo[['Origen', 'Destino', 'TP', 'Kilos']]
                     st.dataframe(
                         df_tabla_geo.sort_values(by='Kilos', ascending=False),
                         hide_index=True,
@@ -1016,7 +1026,8 @@ if archivo_cargado is not None:
                                 
                                 # Texto informativo para cuando pases el mouse por la ruta
                                 tag_txt = " (Tercero)" if es_tercero_linea else " (Directo)"
-                                info_linea = f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}{tag_txt}"
+                                cliente_line = f"<br>Cliente: {row.get('Cliente', 'N/A')}" if row.get('Cliente') else ''
+                                info_linea = f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}{tag_txt}{cliente_line}"
                                 textos_hover.append(info_linea)
 
                         # Definición de colores estratégicos por tipo de flujo
@@ -1097,6 +1108,21 @@ if archivo_cargado is not None:
 
                     # --- RENDERIZADO EN STREAMLIT ---
                     st.plotly_chart(fig, use_container_width=True)
+
+                    st.markdown("##### Detalle de Viajes de la Capa Activa")
+                    if 'Cliente' in df_flujo_mapa.columns:
+                        df_detalle_tramos = df_flujo_mapa[['Origen', 'Destino', 'Cliente', 'TP', 'Kilos']].copy()
+                    else:
+                        df_detalle_tramos = df_flujo_mapa[['Origen', 'Destino', 'TP', 'Kilos']].copy()
+                    st.dataframe(
+                        df_detalle_tramos.sort_values(by='Kilos', ascending=False),
+                        hide_index=True,
+                        use_container_width=True,
+                        height=420,
+                        column_config={
+                            'Kilos': st.column_config.NumberColumn('Kilos', format='%d')
+                        }
+                    )
 
         # ------------------------------------------------------------------
         # PANTALLA 2: EFICIENCIA DE VIAJES (Consolidación)
