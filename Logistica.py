@@ -397,31 +397,8 @@ if archivo_cargado is not None:
                 orig, dest = None, None
                 dep_upper = normalizar_texto(dep.upper().strip())
                 remito_upper = normalizar_texto(remito.upper().strip())
+                localidad_cliente = dict_remitos_localidad.get(remito_upper, "")
 
-                if estado_doc == "R16a":
-                    # Si es Despacho de Tercero (R16a):
-                    # El ORIGEN real es la localidad física del Tercero (que el script extrae del diccionario de clientes/remitos)
-                    orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
-
-                    # El DESTINO real es el cliente final. 
-                    # NOTA: Si en tu Excel la columna 'NOMBRE' es el nombre del tercero (ej. Cereales Quemú) 
-                    # y no tenés el cliente final en otra columna, hacemos que el destino sea el mismo punto 
-                    # o una zona de influencia para que el nodo quede activo correctamente.
-
-                    # 2. El DESTINO real es la localidad que recuperamos desde la solapa CLIENTES
-                    # Usamos 'remito_upper' (que tiene el código CLI_...) para consultar tu diccionario
-                    localidad_cliente = dict_remitos_localidad.get(remito_upper, "")
-
-                    if localidad_cliente:
-                        dest = localidad_cliente  # <-- ¡Acá toma "OLAVARRIA, BUENOS AIRES"!
-                    else:
-                        # Resguardo por si el remito no figura en la hoja CLIENTES
-                        dest = f"ZONA {orig}"
-
-                else:
-                    # Si es despacho directo estándar o tránsito:
-                    orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
-                
                 if tp in ['FOB']:
                     orig, dest = "Proveedor Ext.", dep
                 elif tp == 'CPRA':
@@ -432,12 +409,28 @@ if archivo_cargado is not None:
                     # Si el usuario seleccionó "NO" mostrar ventas en el mapa, salteamos la fila por completo
                     # NOTA: Cambiá 'mostrar_ventas' por el nombre de tu variable del botón/checkbox si es diferente
                     if apertura_cliente_sel=="SI":
-                        id_cliente = row['NOMBRE']
+                        id_cliente = row['NOMBRE'] #en la col "NOMBRE" esta el NRO DEL REMITO.
                         
                         # Evaluación del botón de comando de apertura
                         if apertura_cliente and (id_cliente in clientes_dict):
-                            orig = dep
-                            dest = f"CLI_{id_cliente}_{idx}" # Token único por fila para mapa detallado
+                
+                            if estado_doc == "R16a":
+                                # Si es Despacho de Tercero (R16a):
+                                # El ORIGEN real es la localidad física del Tercero (que el script extrae del diccionario de clientes/remitos)
+                                orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
+
+                                if localidad_cliente:
+                                    dest = localidad_cliente  # <-- ¡Acá toma "OLAVARRIA, BUENOS AIRES"!
+                                else:
+                                    # Resguardo por si el remito no figura en la hoja CLIENTES
+                                    dest = f"ZONA {orig}"
+                            else:
+                                # Si es despacho directo estándar o tránsito:
+                                #orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
+            
+                                orig = dep
+                                dest=localidad_clie
+
                             COORDENADAS[dest] = {
                                 "lat": clientes_dict[id_cliente]['lat'],
                                 "lon": clientes_dict[id_cliente]['lon'],
