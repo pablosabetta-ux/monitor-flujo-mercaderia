@@ -143,6 +143,8 @@ if archivo_cargado is not None:
             df_clientes['LAT'] = pd.to_numeric(df_clientes['LAT'], errors='coerce').fillna(0)
             df_clientes['LONG'] = pd.to_numeric(df_clientes['LONG'], errors='coerce').fillna(0)
 
+            df_clientes['FLETE_PROP'] = (df_clientes['FLETEPROP'].apply(normalizar_texto)) if 'FLETEPROP' in df_clientes.columns else "NO"
+
             # 1. Diccionario para buscar Localidad usando el código del Remito (Llave: NOMBRE_Clean)
             dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD_Clean']))
 
@@ -150,11 +152,6 @@ if archivo_cargado is not None:
             df_geo_unico = df_clientes.drop_duplicates(subset=['LOCALIDAD_Clean']).set_index('LOCALIDAD_Clean')
             dict_coordenadas_clientes = df_geo_unico[['LAT', 'LONG']].to_dict(orient='index')
 
-            # Convertimos a string y limpiamos para asegurar el cruce perfecto de los remitos
-            #if 'NOMBRE' in df_clientes.columns and 'LOCALIDAD' in df_clientes.columns:
-            #    df_clientes['NOMBRE_Clean'] = df_clientes['NOMBRE'].astype(str).str.strip().str.upper()
-            #    dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD'].astype(str).str.upper().strip()))
-            #    dict_coordenadas_clientes = df_clientes.set_index('LOCALIDAD')[['LAT', 'LONG']].to_dict(orient='index')
         except Exception as e:
             st.warning(f"⚠️ No se pudo procesar la hoja 'CLIENTES' o falta la columna 'LOCALIDAD'. Error: {e}")
 
@@ -442,16 +439,27 @@ if archivo_cargado is not None:
                                 localidad_cliente = dict_remitos_localidad.get(remito_upper, "")
 
                                 if localidad_cliente and str(localidad_cliente).upper() != "NAN":
-                                    dest = normalizar_texto(localidad_cliente)
-                                    cliente_display = f"{id_cliente} ({localidad_cliente})"
-                                    localidad_display = localidad_cliente
-                                    if localidad_cliente in dict_coordenadas_clientes:
-                                        lat_dest_debug = dict_coordenadas_clientes[localidad_cliente]['LAT']
-                                        lon_dest_debug = dict_coordenadas_clientes[localidad_cliente]['LONG']
-                                    COORDENADAS[dest] = {
-                                        "lat": clientes_dict[id_cliente]['lat'],
-                                        "lon": clientes_dict[id_cliente]['lon'],
-                                        "display_name": f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad'].upper()})",
+                                    if df_clientes["FLETE_PROP"].iloc[0] == "SI":
+                                        #Desvío especial para clientes con flete propio:
+                                        # el destino es el depostio del tercero
+                    
+                                        dest_norm = normalizar_texto(dest)
+                                        if dest_norm in COORDENADAS:
+                                            lat_dest_debug = COORDENADAS[dest_norm]['lat']
+                                            lon_dest_debug = COORDENADAS[dest_norm]['lon']
+                                            localidad_display = COORDENADAS[dest_norm].get('display_name', dest)
+                                    
+                                    else:
+                                        dest = normalizar_texto(localidad_cliente)
+                                        cliente_display = f"{id_cliente} ({localidad_cliente})"
+                                        localidad_display = localidad_cliente
+                                        if localidad_cliente in dict_coordenadas_clientes:
+                                            lat_dest_debug = dict_coordenadas_clientes[localidad_cliente]['LAT']
+                                            lon_dest_debug = dict_coordenadas_clientes[localidad_cliente]['LONG']
+                                        COORDENADAS[dest] = {
+                                            "lat": clientes_dict[id_cliente]['lat'],
+                                            "lon": clientes_dict[id_cliente]['lon'],
+                                            "display_name": f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad'].upper()})",
                                     }
                                 else:
                                     dest = f"ZONA {orig}"
