@@ -137,7 +137,7 @@ if archivo_cargado is not None:
             
             # Forzamos a que NOMBRE y LOCALIDAD sean texto puro limpiando nulos y espacios de forma masiva
             df_clientes['NOMBRE_Clean'] = df_clientes['NOMBRE'].astype(str).str.strip().str.upper()
-            df_clientes['LOCALIDAD_Clean'] = df_clientes['LOCALIDAD'].astype(str).str.strip()
+            df_clientes['LOCALIDAD_Clean'] = df_clientes['LOCALIDAD'].apply(normalizar_texto)
             
             # Forzamos coordenadas numéricas limpiando posibles errores de tipeo
             df_clientes['LAT'] = pd.to_numeric(df_clientes['LAT'], errors='coerce').fillna(0)
