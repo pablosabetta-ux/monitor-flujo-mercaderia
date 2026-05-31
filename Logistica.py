@@ -397,7 +397,7 @@ if archivo_cargado is not None:
                 orig, dest = None, None
                 dep_upper = normalizar_texto(dep.upper().strip())
                 remito_upper = normalizar_texto(remito.upper().strip())
-                localidad_cliente = dict_remitos_localidad.get(remito_upper, "")
+                localidad_cliente = dict_remitos_localidad.get(remito_upper, "").upper().strip()
 
                 if tp in ['FOB']:
                     orig, dest = "Proveedor Ext.", dep
@@ -497,12 +497,12 @@ if archivo_cargado is not None:
 
                     rastro_coordenadas_debug.append({
                         'Fila_Excel': idx,
-                        'Producto': str(row.get('NomArticulo', 'S/D')),
+                        #'Producto': str(row.get('NomArticulo', 'S/D')),
                         'Nro_Remito_Cuenta': remito,
-                        'Origen_Normalizado': orig_u,
-                        'Destino_Normalizado': dest_u,
+                        'Origen': orig_u,
+                        'Destino': dest_u,
                         'Kilos': kg_abs,
-                        'Estado_Doc': estado_doc,
+                        'Doc': estado_doc,
                         'Resultado_Validacion': estado_validacion,
                         'Display_Name_Destino': dato_clie,
                         'Localidad Clie': localidad_clie,
