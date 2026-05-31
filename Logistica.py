@@ -58,12 +58,14 @@ if archivo_cargado is not None:
                     lat_c = pd.to_numeric(row['LAT'], errors='coerce')
                     lon_c = pd.to_numeric(row['LONG'], errors='coerce')
                     loc_name = str(row['LOCALIDAD']).split(',')[0] if 'LOCALIDAD' in df_clientes.columns else "Cliente"
+                    flete_prop = str(row['FLETEPROP']).strip().upper() if 'FLETEPROP' in df_clientes.columns else "NO"
                     
                     if not pd.isna(lat_c) and not pd.isna(lon_c):
                         clientes_dict[id_cliente] = {
                             "localidad": loc_name,
                             "lat": float(lat_c),
-                            "lon": float(lon_c)
+                            "lon": float(lon_c),
+                            "flete_prop": flete_prop
                         }
             except Exception as e:
                 st.sidebar.warning(f"Aviso en pestaña 'CLIENTES': {e}")
@@ -439,16 +441,15 @@ if archivo_cargado is not None:
                                 localidad_cliente = dict_remitos_localidad.get(remito_upper, "")
 
                                 if localidad_cliente and str(localidad_cliente).upper() != "NAN":
-                                    if df_clientes["FLETE_PROP"].iloc[0] == "SI":
-                                        #Desvío especial para clientes con flete propio:
-                                        # el destino es el depostio del tercero
-                    
+                                    if clientes_dict.get(id_cliente, {}).get("flete_prop", "NO") == "SI":
+                                        # Desvío especial para clientes con flete propio:
+                                        # el destino se toma como la localidad del depósito que despacha el viaje
+                                        dest = dep_upper
                                         dest_norm = normalizar_texto(dest)
                                         if dest_norm in COORDENADAS:
                                             lat_dest_debug = COORDENADAS[dest_norm]['lat']
                                             lon_dest_debug = COORDENADAS[dest_norm]['lon']
-                                            localidad_display = COORDENADAS[dest_norm].get('display_name', dest)
-                                    
+                                            localidad_display = COORDENADAS[dest_norm].get('display_name', dep)
                                     else:
                                         dest = normalizar_texto(localidad_cliente)
                                         cliente_display = f"{id_cliente} ({localidad_cliente})"
