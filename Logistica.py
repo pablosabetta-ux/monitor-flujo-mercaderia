@@ -397,7 +397,6 @@ if archivo_cargado is not None:
                 orig, dest = None, None
                 dep_upper = normalizar_texto(dep.upper().strip())
                 remito_upper = normalizar_texto(remito.upper().strip())
-                localidad_cliente = dict_remitos_localidad.get(remito_upper, "").upper().strip()
 
                 if tp in ['FOB']:
                     orig, dest = "Proveedor Ext.", dep
@@ -419,6 +418,7 @@ if archivo_cargado is not None:
                                 # El ORIGEN real es la localidad física del Tercero (que el script extrae del diccionario de clientes/remitos)
                                 orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
 
+                                localidad_cliente = dict_remitos_localidad.get(remito_upper, "").upper().strip()
                                 if localidad_cliente:
                                     dest = localidad_cliente  # <-- ¡Acá toma "OLAVARRIA, BUENOS AIRES"!
                                 else:
