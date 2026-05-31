@@ -138,7 +138,7 @@ if archivo_cargado is not None:
             # Convertimos a string y limpiamos para asegurar el cruce perfecto de los remitos
             if 'NOMBRE' in df_clientes.columns and 'LOCALIDAD' in df_clientes.columns:
                 df_clientes['NOMBRE_Clean'] = df_clientes['NOMBRE'].astype(str).str.strip().str.upper()
-                dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD'].astype(str).str.strip()))
+                dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD'].astype(str).str.upper().strip()))
         except Exception as e:
             st.warning(f"⚠️ No se pudo procesar la hoja 'CLIENTES' o falta la columna 'LOCALIDAD'. Error: {e}")
 
