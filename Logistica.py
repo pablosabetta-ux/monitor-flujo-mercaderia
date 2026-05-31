@@ -444,12 +444,14 @@ if archivo_cargado is not None:
                                     if clientes_dict.get(id_cliente, {}).get("flete_prop", "NO") == "SI":
                                         # Desvío especial para clientes con flete propio:
                                         # el destino se toma como la localidad del depósito que despacha el viaje
-                                        dest = dep_upper
-                                        dest_norm = normalizar_texto(dest)
-                                        if dest_norm in COORDENADAS:
-                                            lat_dest_debug = COORDENADAS[dest_norm]['lat']
-                                            lon_dest_debug = COORDENADAS[dest_norm]['lon']
-                                            localidad_display = COORDENADAS[dest_norm].get('display_name', dep)
+                                        if dep_upper in COORDENADAS:
+                                            dest = dep_upper
+                                            lat_dest_debug = COORDENADAS[dep_upper]['lat']
+                                            lon_dest_debug = COORDENADAS[dep_upper]['lon']
+                                            localidad_display = COORDENADAS[dep_upper].get('display_name', dep)
+                                        else:
+                                            dest = "DESCONOCIDO"
+                                            localidad_display = f"DEPÓSITO NO MAPEADO: {dep}"
                                     else:
                                         dest = normalizar_texto(localidad_cliente)
                                         cliente_display = f"{id_cliente} ({localidad_cliente})"
@@ -1349,7 +1351,7 @@ if archivo_cargado is not None:
                     """)
 
     except Exception as e:
-        st.error(f"Error procesando el archivo: {e}")
+        st.error(f"Error procesando el archivo: {type(e).__name__}: {e}")
                 
 else:
     st.info("💡 Esperando archivo de movimientos para mapear ineficiencias...")
