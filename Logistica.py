@@ -135,11 +135,25 @@ if archivo_cargado is not None:
             df_clientes = pd.read_excel(archivo_cargado, sheet_name="CLIENTES")
             df_clientes.columns = df_clientes.columns.str.strip()
             
+            # Forzamos a que NOMBRE y LOCALIDAD sean texto puro limpiando nulos y espacios de forma masiva
+            df_clientes['NOMBRE_Clean'] = df_clientes['NOMBRE'].astype(str).str.strip().str.upper()
+            df_clientes['LOCALIDAD_Clean'] = df_clientes['LOCALIDAD'].astype(str).str.strip()
+            
+            # Forzamos coordenadas numéricas limpiando posibles errores de tipeo
+            df_clientes['LAT'] = pd.to_numeric(df_clientes['LAT'], errors='coerce').fillna(0)
+            df_clientes['LONG'] = pd.to_numeric(df_clientes['LONG'], errors='coerce').fillna(0)
+
+            # 1. Diccionario para buscar Localidad usando el código del Remito (Llave: NOMBRE_Clean)
+            dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD_Clean']))
+
+            # 2. Diccionario para buscar Coordenadas usando el texto de la localidad limpia
+            dict_coordenadas_clientes = df_clientes.set_index('LOCALIDAD_Clean')[['LAT', 'LONG']].to_dict(orient='index')
+
             # Convertimos a string y limpiamos para asegurar el cruce perfecto de los remitos
-            if 'NOMBRE' in df_clientes.columns and 'LOCALIDAD' in df_clientes.columns:
-                df_clientes['NOMBRE_Clean'] = df_clientes['NOMBRE'].astype(str).str.strip().str.upper()
-                dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD'].astype(str).str.upper().strip()))
-                dict_coordenadas_clientes = df_clientes.set_index('LOCALIDAD')[['LAT', 'LONG']].to_dict(orient='index')
+            #if 'NOMBRE' in df_clientes.columns and 'LOCALIDAD' in df_clientes.columns:
+            #    df_clientes['NOMBRE_Clean'] = df_clientes['NOMBRE'].astype(str).str.strip().str.upper()
+            #    dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD'].astype(str).str.upper().strip()))
+            #    dict_coordenadas_clientes = df_clientes.set_index('LOCALIDAD')[['LAT', 'LONG']].to_dict(orient='index')
         except Exception as e:
             st.warning(f"⚠️ No se pudo procesar la hoja 'CLIENTES' o falta la columna 'LOCALIDAD'. Error: {e}")
 
@@ -1073,20 +1087,6 @@ if archivo_cargado is not None:
             """)
 
             dias_ventana = st.slider("Ventana de días para agrupar viajes cercanos:", min_value=1, max_value=7, value=3)
-
-
-            # --- CARGA DINÁMICA DE LA HOJA DE CLIENTES (Puente por campo 'NOMBRE') ---
-            #dict_remitos_localidad = {}
-            #try:
-            #    df_clientes = pd.read_excel(archivo_cargado, sheet_name="CLIENTES")
-            #    df_clientes.columns = df_clientes.columns.str.strip()
-            #    
-            #    # Convertimos a string y limpiamos para asegurar el cruce perfecto de los remitos
-            #    if 'NOMBRE' in df_clientes.columns and 'LOCALIDAD' in df_clientes.columns:
-            #       df_clientes['NOMBRE_Clean'] = df_clientes['NOMBRE'].astype(str).str.strip().str.upper()
-            #       dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD'].astype(str).str.strip()))
-            #except Exception as e:
-            #    st.warning(f"⚠️ No se pudo procesar la hoja 'CLIENTES' o falta la columna 'LOCALIDAD'. Error: {e}")
 
             # Función auxiliar para calcular distancias entre puntos (Fórmula de Haversine)
             def calcular_distancia_km(ponto1, ponto2):
