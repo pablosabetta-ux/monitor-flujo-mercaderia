@@ -428,7 +428,7 @@ if archivo_cargado is not None:
                     # Si el usuario seleccionó "NO" mostrar ventas en el mapa, salteamos la fila por completo
                     # NOTA: Cambiá 'mostrar_ventas' por el nombre de tu variable del botón/checkbox si es diferente
                     if apertura_cliente_sel=="SI":
-                        id_cliente = row['NOMBRE'] #en la col "NOMBRE" esta el NRO DEL REMITO.
+                        id_cliente = normalizar_texto(str(row['NOMBRE']).strip())  # Aseguramos siempre clave string normalizada
                         
                         # Evaluación del botón de comando de apertura
                         if apertura_cliente and (id_cliente in clientes_dict):
@@ -943,9 +943,6 @@ if archivo_cargado is not None:
                             st.write("**Resumen por tipo de comprobante (ESTADO):**")
                             st.dataframe(df_mapa_filtrado['ESTADO'].value_counts())
                             
-                            st.write("**Muestra de Tramos (Primeras 10 filas):**")
-                            st.dataframe(df_mapa_filtrado[['Origen', 'Destino', 'TP', 'Kilos', 'ESTADO']].head(10))
-    
                             if rastro_auditoria:
                                 st.write("### 🔬 Trazabilidad Vuelta por Vuelta (`for` loop)")
                                 st.write("Esta tabla muestra qué valor tenía cada variable interna en cada paso del procesamiento:")
