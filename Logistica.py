@@ -427,7 +427,6 @@ if archivo_cargado is not None:
                             else:
                                 # Si es despacho directo estándar o tránsito:
                                 #orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
-            
                                 orig = dep
                                 dest=localidad_clie
 
@@ -482,7 +481,7 @@ if archivo_cargado is not None:
                     existe_destino = dest_u in COORDENADAS
 
                     # 🔍 GUARDAMOS EL ESTADO DE DEBUG (Pasó o por qué falló)
-                    estado_validacion = "APROBADO ✅"
+                    estado_validacion = f"APROBADO ✅ - Origen '{orig_u}' y Destino '{dest_u}' encontrados en COORDENADAS"
                     if not existe_origen and not existe_destino:
                         estado_validacion = "❌ ERROR: Ni Origen ni Destino existen en COORDENADAS"
                     elif not existe_origen:
