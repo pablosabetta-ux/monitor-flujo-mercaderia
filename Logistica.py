@@ -541,8 +541,7 @@ if archivo_cargado is not None:
                     localidad_clie = COORDENADAS[dest_u].get('localidad', 'N/A') if existe_destino else "N/A"
                     Lat_clie = COORDENADAS[dest_u].get('latitud', 'N/A') if existe_destino else "N/A"
                     Long_clie = COORDENADAS[dest_u].get('longitud', 'N/A') if existe_destino else "N/A"
-                    Lat_Long= f"Lat: {Lat_clie}, Long: {Long_clie}" if existe_destino else "N/A"
-
+                    
                     rastro_coordenadas_debug.append({
                         'Fila_Excel': idx,
                         'Nro_Remito_Cuenta': remito,
@@ -554,17 +553,8 @@ if archivo_cargado is not None:
                         'Display_Name_Destino': dato_clie,
                         'Localidad Clie': localidad_display,
                         'Latitud_Dest': lat_dest_debug,
-                        'Longitud_Dest': lon_dest_debug,
-                        'Lat_Long_Destino': Lat_Long
+                        'Longitud_Dest': lon_dest_debug  
                     })
-#----------------------------------------------
-                    #orig_dest_mapa.append({
-                    #    'Origen': orig_u,
-                    #    'Destino': dest_u,
-                    #    'Kilos': kg_abs,
-                    #    'TP': tp,
-                    #    'ESTADO': estado_doc
-                    #})
                     
                     if existe_origen and existe_destino:
                         orig_display = COORDENADAS[orig_u].get('display_name', orig)
