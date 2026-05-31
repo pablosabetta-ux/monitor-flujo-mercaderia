@@ -139,6 +139,7 @@ if archivo_cargado is not None:
             if 'NOMBRE' in df_clientes.columns and 'LOCALIDAD' in df_clientes.columns:
                 df_clientes['NOMBRE_Clean'] = df_clientes['NOMBRE'].astype(str).str.strip().str.upper()
                 dict_remitos_localidad = dict(zip(df_clientes['NOMBRE_Clean'], df_clientes['LOCALIDAD'].astype(str).str.upper().strip()))
+                dict_coordenadas_clientes = df_clientes.set_index('LOCALIDAD')[['LAT', 'LONG']].to_dict(orient='index')
         except Exception as e:
             st.warning(f"⚠️ No se pudo procesar la hoja 'CLIENTES' o falta la columna 'LOCALIDAD'. Error: {e}")
 
@@ -424,11 +425,19 @@ if archivo_cargado is not None:
                                 llave_busqueda_cliente = str(remito).strip().upper()
                                 localidad_cliente = dict_remitos_localidad.get(llave_busqueda_cliente, "")
 
-                                if localidad_cliente:
-                                    dest = localidad_cliente  # <-- ¡Acá toma "OLAVARRIA, BUENOS AIRES"!
+                                if localidad_cliente and str(localidad_cliente).upper() != "NAN":
+                                    dest = localidad_cliente  # El destino es la localidad (ej: "OLAVARRIA, BUENOS AIRES")
+                                    localidad_display = localidad_cliente
+                                    
+                                    # 3. EXTRAER LAT Y LONG DE LA HOJA CLIENTES
+                                    # Buscamos en nuestro diccionario geográfico de clientes usando la localidad
+                                    if localidad_cliente in dict_coordenadas_clientes:
+                                        lat_dest_debug = dict_coordenadas_clientes[localidad_cliente]['LAT']
+                                        lon_dest_debug = dict_coordenadas_clientes[localidad_cliente]['LONG']
                                 else:
                                     # Resguardo por si el remito no figura en la hoja CLIENTES
                                     dest = f"ZONA {orig}"
+                                    localidad_display = "SIN MASTR DE CLIENTE"
                             else:
                                 # Si es despacho directo estándar o tránsito:
                                 #orig = COORDENADAS[dep_upper].get('display_name', dep) if dep_upper in COORDENADAS else dep
@@ -455,6 +464,7 @@ if archivo_cargado is not None:
                             'Display Name':f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad']})",
                             'Latitud': clientes_dict[id_cliente]['lat'] if id_cliente in clientes_dict else None,
                             'Longitud': clientes_dict[id_cliente]['lon'] if id_cliente in clientes_dict else None,
+                            'Localidad display': localidad_display if apertura_cliente else None,
                             'Localidad': clientes_dict[id_cliente]['localidad'] if id_cliente in clientes_dict else None
                         })
 
