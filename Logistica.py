@@ -203,7 +203,7 @@ if archivo_cargado is not None:
                         .sort_values(ascending=False)
                         .reset_index()
                     )
-                    df_articulo = ranking_articulos['NomArticulo'].tolist()
+                    df_articulo = ["TODAS"] + ranking_articulos['NomArticulo'].tolist()
 
             #df_articulo = sorted(df_articulos_filtrados['NomArticulo'].dropna().unique())
             articulo_sel = st.sidebar.selectbox("📦 Seleccionar Artículo:", df_articulo)        
