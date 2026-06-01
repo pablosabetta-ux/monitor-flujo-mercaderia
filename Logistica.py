@@ -591,7 +591,8 @@ if archivo_cargado is not None:
                                 'LAT_ORIG': COORDENADAS[orig_u]['lat'],
                                 'LON_ORIG': COORDENADAS[orig_u]['lon'],
                                 'LAT_DEST': lat_dest_debug,
-                                'LON_DEST': lon_dest_debug
+                                'LON_DEST': lon_dest_debug,
+                                'Nro_Remito_Cuenta': remito
                             })
 
                     volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
