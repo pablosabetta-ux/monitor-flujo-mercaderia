@@ -205,8 +205,12 @@ if archivo_cargado is not None:
                     )
                     df_articulo = ["TODAS"] + ranking_articulos['NomArticulo'].tolist()
 
-            #df_articulo = sorted(df_articulos_filtrados['NomArticulo'].dropna().unique())
-            articulo_sel = st.sidebar.selectbox("📦 Seleccionar Artículo:", df_articulo)        
+            #articulo_sel = st.sidebar.selectbox("📦 Seleccionar Artículo:", df_articulo)        
+            articulo_sel = st.sidebar.multiselect(
+                "Seleccioná los productos (Vacío = TODOS)", 
+                options=df_articulo,
+                default=[]
+            )
 
             # --- FILTRADO DINÁMICO BASE DE DATOS ---
             df_filtrado = df_base[df_base['NomArticulo'] == articulo_sel].copy()
