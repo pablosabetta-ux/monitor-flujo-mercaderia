@@ -14,6 +14,16 @@ def normalizar_texto(texto):
     texto_limpio = "".join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
     return texto_limpio.upper().strip()
 
+# Inicializamos la variable de control en el estado de la sesión si no existe
+if 'proceso_1_ejecutado' not in st.session_state:
+    st.session_state['proceso_1_ejecutado'] = False
+
+if 'orig_dest_mapa' not in st.session_state:
+    st.session_state['orig_dest_mapa'] = []
+
+if 'rastro_coordenadas_debug' not in st.session_state:
+    st.session_state['rastro_coordenadas_debug'] = []
+
 # Configuración de la página de Streamlit
 st.set_page_config(layout="wide", page_title="Análisis de Ineficiencias Logísticas")
 st.title("📊 Monitor de Flujos, Ineficiencias y Cuellos de Botella")
@@ -598,6 +608,9 @@ if archivo_cargado is not None:
                     volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
                     volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
 
+            if len(orig_dest_mapa) > 0 or len(rastro_coordenadas_debug) > 0:
+                st.session_state['proceso_1_ejecutado'] = True
+            
             df_flujo_mapa = pd.DataFrame(orig_dest_mapa)
 
             # --- DISPARO DE COMPONENTES EN PANTALLA ---
@@ -1190,6 +1203,13 @@ if archivo_cargado is not None:
         # ------------------------------------------------------------------
         elif pantalla_activa == "🏭 Nuevos Depósitos":
             st.subheader("📍 Análisis de Densidad de Entregas y Costos por Rangos de Distancia")
+            
+            # 🛑 CANDADO DE SEGURIDAD
+            if not st.session_state['proceso_1_ejecutado']:
+                st.warning("⚠️ **Datos no disponibles:** Primero debés cargar el archivo Excel y ejecutar el procesamiento en la pantalla principal para estructurar la red logística.")
+                st.info("💡 *Instrucciones:* Seleccioná la pantalla **🗺️ Flujos de Kilos (Mapa)** en el menú izquierdo, subí tu archivo de movimientos y aplicá los filtros iniciales.")
+                st.stop() # <-- Frena el script acá para que no intente ejecutar las matemáticas de abajo y crashee
+            
             st.write("""
             Análisis financiero y logístico que distribuye el gasto total de **USD 300.000** en base a los kilómetros 
             reales recorridos. Los fletes con la misma fecha, origen y destino se consolidan en un único camión.
