@@ -203,7 +203,7 @@ if archivo_cargado is not None:
                         .sort_values(ascending=False)
                         .reset_index()
                     )
-                    df_articulo = ["TODAS"] + ranking_articulos['NomArticulo'].tolist()
+                    df_articulo = ranking_articulos['NomArticulo'].tolist()
 
             articulo_sel = st.sidebar.selectbox("📦 Seleccionar Artículo:", df_articulo)        
             
@@ -1188,9 +1188,153 @@ if archivo_cargado is not None:
         # PANTALLA 4: Ubicación de depósitos
         # ------------------------------------------------------------------
         elif pantalla_activa == "🏭 Nuevos Depósitos":
-            st.subheader("📍 Análisis de Densidad de Entregas para Apertura de Hubs")
-            st.write("Análisis de concentración de Kilos despachados a zonas comerciales para justificar la apertura estratégica de depósitos regionales.")
+            st.subheader("📍 Análisis de Densidad de Entregas y Costos por Rangos de Distancia")
+            st.write("""
+            Análisis financiero y logístico que distribuye el gasto total de **USD 300.000** en base a los kilómetros 
+            reales recorridos. Los fletes con la misma fecha, origen y destino se consolidan en un único camión.
+            """)
 
+            # 1. FUNCIÓN PARA CALCULAR DISTANCIA EN KM (Fórmula de Haversine)
+            def calcular_distancia_km(lat1, lon1, lat2, lon2):
+                try:
+                    if any(v == "N/A" or v == 0 or pd.isna(v) for v in [lat1, lon1, lat2, lon2]):
+                        return 0.0
+                    # Radio de la Tierra en km
+                    R = 6371.0
+                    
+                    rad_lat1, rad_lon1 = np.radians(float(lat1)), np.radians(float(lon1))
+                    rad_lat2, rad_lon2 = np.radians(float(lat2)), np.radians(float(lon2))
+                    
+                    dlat = rad_lat2 - rad_lat1
+                    dlon = rad_lon2 - rad_lon1
+                    
+                    a = np.sin(dlat / 2)**2 + np.cos(rad_lat1) * np.cos(rad_lat2) * np.sin(dlon / 2)**2
+                    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+                    return R * c
+                except:
+                    return 0.0
+
+            # 2. EXTRAER VIAJES INDIVIDUALES DESDE TU MATRIZ DE MAPA
+            viajes_base = []
+            if orig_dest_mapa:
+                # Reconstruimos la información temporal asociando cada índice a su fila original
+                for v in orig_dest_mapa:
+                    # Buscamos la fecha de la fila original en df_final usando el índice si es posible o una aproximación
+                    viajes_base.append({
+                        'Origen': v['Origen'],
+                        'Destino': v['Destino'],
+                        'Kilos': v['Kilos'],
+                        'LAT_ORIG': v['LAT_ORIG'],
+                        'LON_ORIG': v['LON_ORIG'],
+                        'LAT_DEST': v['LAT_DEST'],
+                        'LON_DEST': v['LON_DEST'],
+                        'Remito': v.get('Nro_Remito_Cuenta', 'S/D'), # Asegurar captura en el bucle principal
+                        # Usamos una clave de camión combinando Origen y Destino (y fecha si estuviera disponible)
+                        'Camion_ID': f"{v['Origen']}_{v['Destino']}"
+                    })
+
+            if not viajes_base:
+                st.warning("⚠️ No hay datos válidos geolocalizados para realizar el análisis de costos. Revisá los filtros o el mapeo de clientes.")
+            else:
+                df_viajes = pd.DataFrame(viajes_base)
+
+                # Calcular la distancia de cada tramo
+                df_viajes['Kilometros'] = df_viajes.apply(
+                    lambda r: calcular_distancia_km(r['LAT_ORIG'], r['LON_ORIG'], r['LAT_DEST'], r['LON_DEST']), axis=1
+                )
+
+                # 3. CONSOLIDACIÓN POR CAMIÓN (Mismo Origen y Destino = 1 Solo Camión)
+                # Agrupamos para calcular los kilómetros totales de la flota instalada
+                df_camiones = df_viajes.groupby(['Camion_ID', 'Origen', 'Destino']).agg({
+                    'Kilometros': 'first', # La distancia del viaje es la misma
+                    'Kilos': 'sum'
+                }).reset_index()
+
+                kms_totales_flota = df_camiones['Kilometros'].sum()
+
+                if kms_totales_flota == 0:
+                    st.error("La distancia total calculada de los viajes es 0 km. No se puede prorratear el costo.")
+                else:
+                    # 4. CÁLCULO DEL COSTO POR KILÓMETRO (USD 300.000 / Kms Totales)
+                    COSTO_TOTAL_PERIODO = 300000.0
+                    costo_por_km = COSTO_TOTAL_PERIODO / kms_totales_flota
+
+                    # Asignamos el costo a cada viaje individual en base a sus kilómetros recorridos
+                    df_viajes['Costo_Viaje_Proporcional'] = df_viajes['Kilometros'] * costo_por_km
+
+                    # 5. ASIGNACIÓN DE RANGOS DE 100 KMS
+                    def asignar_rango(km):
+                        if km <= 100: return "0 a 100 km"
+                        elif km <= 200: return "101 a 200 km"
+                        elif km <= 300: return "201 a 300 km"
+                        elif km <= 400: return "301 a 400 km"
+                        elif km <= 500: return "401 a 500 km"
+                        else: return "Más de 500 km"
+
+                    df_viajes['Rango_Distancia'] = df_viajes['Kilometros'].apply(asignar_rango)
+
+                    # 6. CONSOLIDACIÓN DE LA TABLA PRINCIPAL POR RANGO
+                    # Para la cantidad de viajes reales (camiones), contamos los Camion_ID únicos por rango
+                    tabla_rangos = df_viajes.groupby('Rango_Distancia').agg(
+                        Kilos_Totales=('Kilos', 'sum'),
+                        Cantidad_Viajes=('Camion_ID', 'nunique'),
+                        Costo_Total=('Costo_Viaje_Proporcional', 'sum')
+                    ).reset_index()
+
+                    # Costo unitario = Costo Total del rango / Kilos Totales del rango
+                    tabla_rangos['Costo_Unitario_USD_Kg'] = tabla_rangos['Costo_Total'] / tabla_rangos['Kilos_Totales']
+
+                    # Ordenamos de menor a mayor distancia
+                    orden_rangos = {"0 a 100 km": 1, "101 a 200 km": 2, "201 a 300 km": 3, "301 a 400 km": 4, "401 a 500 km": 5, "Más de 500 km": 6}
+                    tabla_rangos['Orden'] = tabla_rangos['Rango_Distancia'].map(orden_rangos)
+                    tabla_rangos = tabla_rangos.sort_values('Orden').drop(columns=['Orden'])
+
+                    # Métricas de cabecera financieras
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("💰 Presupuesto Total Fletes", f"USD {COSTO_TOTAL_PERIODO:,.0f}")
+                    m2.metric("🛣️ Kilómetros Totales Flota", f"{kms_totales_flota:,.1f} Km")
+                    m3.metric("💵 Costo por Km Promedio", f"USD {costo_por_km:,.2f} / Km")
+
+                    st.write("### 📊 Consolidado de Costos por Rangos de Distribución")
+                    
+                    # Formateo visual prolijo para la tabla resumen
+                    tabla_visual = tabla_rangos.copy()
+                    tabla_visual['Kilos Totales'] = tabla_visual['Kilos_Totales'].map('{:,.0f} Kg'.format)
+                    tabla_visual['Cantidad Viajes'] = tabla_visual['Cantidad_Viajes'].map('{:,.0f}'.format)
+                    tabla_visual['Costo Unitario (USD/Kg)'] = tabla_visual['Costo_Unitario_USD_Kg'].map('USD {:,.4f}'.format)
+                    tabla_visual['Costo Total Rango'] = tabla_visual['Costo_Total'].map('USD {:,.2f}'.format)
+                    
+                    st.dataframe(
+                        tabla_visual[['Rango_Distancia', 'Kilos Totales', 'Cantidad Viajes', 'Costo Unitario (USD/Kg)', 'Costo Total Rango']], 
+                        use_container_width=True, 
+                        hide_index=True
+                    )
+
+                    # 7. INTERFAZ REMITO POR REMITO (DESPLEGABLE INTERACTIVO)
+                    st.write("### 🔍 Apertura al Detalle Remito por Remito")
+                    st.caption("Hace clic en cada rango de distancia para auditar los documentos comerciales y camiones físicos afectados.")
+
+                    for rango in tabla_rangos['Rango_Distancia']:
+                        df_filtro_rango = df_viajes[df_viajes['Rango_Distancia'] == rango]
+                        
+                        with st.expander(f"📂 Ver detalle para el rango: {rango} ({len(df_filtro_rango)} registros de artículos)"):
+                            # Agrupamos por Remito/Cliente para mostrar el costo exacto asignado a ese documento comercial
+                            df_detalle_remitos = df_filtro_rango.groupby(['Remito', 'Origen', 'Destino']).agg({
+                                'Kilometros': 'first',
+                                'Kilos': 'sum',
+                                'Costo_Viaje_Proporcional': 'sum'
+                            }).reset_index()
+
+                            df_detalle_remitos['Costo_Unitario_Item'] = df_detalle_remitos['Costo_Viaje_Proporcional'] / df_detalle_remitos['Kilos']
+                            
+                            # Formateo estético del detalle interno
+                            df_detalle_remitos.columns = ['Nro Remito / Cuenta', 'Origen Físico', 'Localidad Destino', 'Km Recorridos', 'Kilos Totales', 'Costo Asignado (USD)', 'Costo Unitario (USD/Kg)']
+                            df_detalle_remitos['Km Recorridos'] = df_detalle_remitos['Km Recorridos'].map('{:,.1f} Km'.format)
+                            df_detalle_remitos['Kilos Totales'] = df_detalle_remitos['Kilos Totales'].map('{:,.0f} Kg'.format)
+                            df_detalle_remitos['Costo Asignado (USD)'] = df_detalle_remitos['Costo Asignado (USD)'].map('USD {:,.2f}'.format)
+                            df_detalle_remitos['Costo Unitario (USD/Kg)'] = df_detalle_remitos['Costo Unitario (USD/Kg)'].map('USD {:,.4f}'.format)
+
+                            st.dataframe(df_detalle_remitos, use_container_width=True, hide_index=True)
 
 
     except Exception as e:
