@@ -316,7 +316,9 @@ if archivo_cargado is not None:
             transito_por_lote = dict(zip(ingresos_t['Lote_Clean'], ingresos_t['DEPOSITO']))
 
             orig_dest_sankey = []
-                
+            st.session_state['orig_dest_mapa'] = []
+            st.session_state['rastro_coordenadas_debug'] = []
+
             for idx, row in df_filtrado.iterrows():
                             
                 tp = str(row['TP']).strip()
@@ -574,7 +576,7 @@ if archivo_cargado is not None:
                     Lat_clie = COORDENADAS[dest_u].get('latitud', 'N/A') if existe_destino else "N/A"
                     Long_clie = COORDENADAS[dest_u].get('longitud', 'N/A') if existe_destino else "N/A"
                     
-                    rastro_coordenadas_debug.append({
+                    st.session_state['rastro_coordenadas_debug'].append({
                         'Fila_Excel': idx,
                         'Nro_Remito_Cuenta': remito,
                         'Origen': orig_u,
@@ -591,7 +593,7 @@ if archivo_cargado is not None:
                     if existe_origen and existe_destino:
                         orig_display = COORDENADAS[orig_u].get('display_name', orig)
 
-                        orig_dest_mapa.append({
+                        st.session_state['orig_dest_mapa'].append({
                                 'Origen': orig_display.upper().strip(), 
                                 'Destino': str(dest).upper().strip(), 
                                 'Cliente': cliente_display if cliente_display else None,
@@ -608,7 +610,7 @@ if archivo_cargado is not None:
                     volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
                     volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
 
-            if len(orig_dest_mapa) > 0 or len(rastro_coordenadas_debug) > 0:
+            if len(st.session_state['orig_dest_mapa']) > 0:
                 st.session_state['proceso_1_ejecutado'] = True
             
             df_flujo_mapa = pd.DataFrame(orig_dest_mapa)
@@ -1214,7 +1216,7 @@ if archivo_cargado is not None:
             Análisis financiero y logístico que distribuye el gasto total de **USD 300.000** en base a los kilómetros 
             reales recorridos. Los fletes con la misma fecha, origen y destino se consolidan en un único camión.
             """)
-
+            
             # 1. FUNCIÓN PARA CALCULAR DISTANCIA EN KM (Fórmula de Haversine)
             def calcular_distancia_km(lat1, lon1, lat2, lon2):
                 try:
@@ -1237,9 +1239,13 @@ if archivo_cargado is not None:
 
             # 2. EXTRAER VIAJES INDIVIDUALES DESDE TU MATRIZ DE MAPA
             viajes_base = []
-            if orig_dest_mapa:
+            viajes_base = st.session_state['orig_dest_mapa']
+
+            if viajes_base:
+                df_viajes = pd.DataFrame(viajes_base)
+            
                 # Reconstruimos la información temporal asociando cada índice a su fila original
-                for v in orig_dest_mapa:
+                for v in st.session_state['orig_dest_mapa']:
                     # Buscamos la fecha de la fila original en df_final usando el índice si es posible o una aproximación
                     viajes_base.append({
                         'Origen': v['Origen'],
