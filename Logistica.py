@@ -219,9 +219,16 @@ if archivo_cargado is not None:
             st.sidebar.markdown("---")
             st.sidebar.header("⏱️ Rango de tiempo y mes")
 
-            # Selector de Rango de Fechas basado en lo filtrado
-            fecha_min = df_filtrado['Fecha'].min().date()
-            fecha_max = df_filtrado['Fecha'].max().date()
+            # Evitamos el error de NaTType filtrando solo las fechas válidas para los selectores
+            fechas_validas = df_filtrado['Fecha'].dropna()
+            
+            if not fechas_validas.empty:
+                fecha_min = fechas_validas.min().date()
+                fecha_max = fechas_validas.max().date()
+            else:
+                # Resguardo si todo el archivo estuviera roto o vacío
+                fecha_min = pd.Timestamp.now().date()
+                fecha_max = pd.Timestamp.now().date()
 
             fechas = st.sidebar.date_input(
                 "Rango de fechas:",
