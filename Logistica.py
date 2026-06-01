@@ -207,7 +207,7 @@ if archivo_cargado is not None:
 
             #articulo_sel = st.sidebar.selectbox("📦 Seleccionar Artículo:", df_articulo)        
             articulo_sel = st.sidebar.multiselect(
-                "Seleccioná los productos (Vacío = TODOS)", 
+                "📦 Seleccioná los productos (Vacío = TODOS)", 
                 options=df_articulo,
                 default=[]
             )
