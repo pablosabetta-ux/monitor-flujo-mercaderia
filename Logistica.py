@@ -164,7 +164,7 @@ if archivo_cargado is not None:
         # El selector principal que determina qué pantalla se dibuja a la derecha
         pantalla_activa = st.sidebar.radio(
             "Seleccioná la herramienta:",
-            ["📊 Monitoreo de Stock y Flujos", "📦 Consolidación de Viajes (Eficiencia)", "🏭 Análisis de Hubs (Nuevos Depósitos)"]
+            ["📊 Monitoreo de Stock y Flujos", "📦 Consolidación de Viajes (Eficiencia)", "🏭 Análisis de Hubs (Nuevos Depósitos)", "🏭 Nuevos Depósitos"]
         )
         
         st.sidebar.markdown("---")
@@ -762,181 +762,9 @@ if archivo_cargado is not None:
                 modo_mapa = st.radio("Seleccioná la perspectiva del mapa:", ["Ver1", "Ver2"], horizontal=True)
 
                 if modo_mapa == "Ver1":
-                    if df_flujo_mapa.empty:
-                        st.info("No hay coordenadas o tramos activos para proyectar geográficamente.")
-                    else:
-                        df_mapa_consolidado = df_flujo_mapa.groupby(['Origen', 'Destino', 'Cliente', 'TP'], as_index=False)['Kilos'].sum()
-                        fig_mapa = go.Figure()
-
-                        # A. DIBUJAR CONTORNOS PROVINCIALES CON GEOJSON (SI ESTÁ DISPONIBLE)
-                        if geojson_provincias:
-                            for feature in geojson_provincias['features']:
-                                prov_name = feature['properties'].get('name', 'Provincia')
-                                geometry = feature['geometry']
-                                coords_list = [geometry['coordinates']] if geometry['type'] == 'Polygon' else geometry['coordinates']
-                                
-                                for polygon in coords_list:
-                                    # En GeoJSON el formato de cada anillo es [[lon, lat], [lon, lat], ...]
-                                    # Si está anidado (MultiPolygon), extraemos el anillo principal
-                                    ring = polygon[0] if isinstance(polygon[0][0], list) else polygon
-                                    lons = [pt[0] for pt in ring]
-                                    lats = [pt[1] for pt in ring]
-                                    
-                                    fig_mapa.add_trace(go.Scattergeo(
-                                        lon = lons,
-                                        lat = lats,
-                                        mode = 'lines',
-                                        line = dict(width = 1.2, color = '#28a745'), # Línea verde constante y definida
-                                        hoverinfo = 'text',
-                                        text = prov_name,
-                                        showlegend = False
-                                    ))
-
-                    # 1. Dibujar las líneas de flujo (Vínculos geográficos)
-                    max_kilos = df_mapa_consolidado['Kilos'].max() if not df_mapa_consolidado.empty else 1
                     
-                    # B. Líneas Logísticas Dinámicas
-                    max_kilos = df_mapa_consolidado['Kilos'].max() if not df_mapa_consolidado.empty else 1
-
-                    # Listas para recolectar latitudes y longitudes de los tramos activos
-                    lats_activas = []
-                    lons_activas = []
-
-                    for index, row in df_mapa_consolidado.iterrows():
-                        o_name = str(row['Origen']).upper().strip()
-                        d_name = str(row['Destino']).upper().strip()
-                        tipo_p = row['TP']
-
-                    # Si el origen es un campo roto o no está en la base de datos de depósitos, usamos el genérico
-                        if o_name not in COORDENADAS:
-                            o_name = "DESCONOCIDO"
-
-                        # Si la apertura por cliente está activa y el destino es un cliente individual
-                        if d_name.startswith("CLI_"):
-                            # Extraemos el código limpio del cliente (ej: de 'CLI_2200007945_10' extrae '2200007945')
-                            partes = d_name.split('_')
-                            if len(partes) >= 2:
-                                id_cliente_limpio = partes[1]
-                                # Si el cliente existe en el diccionario importado de la pestaña CLIENTES
-                                if id_cliente_limpio in clientes_dict:
-                                    # Le inyectamos dinámicamente las coordenadas a la clave con ID único para que Plotly la encuentre
-                                    COORDENADAS[d_name] = {
-                                        "lat": clientes_dict[id_cliente_limpio]['lat'],
-                                        "lon": clientes_dict[id_cliente_limpio]['lon'],
-                                        "localidad": clientes_dict[id_cliente_limpio]['localidad'].upper().strip(),
-                                        "display_name": f"Cliente: {id_cliente_limpio} ({clientes_dict[id_cliente_limpio]['localidad']})"
-                                    }
-
-                        # Buscamos coordenadas en la matriz, si no existen salta
-                        if o_name in COORDENADAS and d_name in COORDENADAS:
-                            coord_orig = COORDENADAS[o_name]
-                            coord_dest = COORDENADAS[d_name]
-                            
-                            # Guardamos los puntos para calcular el encuadre del zoom posterior
-                            lats_activas.extend([coord_orig['lat'], coord_dest['lat']])
-                            lons_activas.extend([coord_orig['lon'], coord_dest['lon']])
-
-                            # El grosor de la línea depende del volumen de kilos trasladados
-                            grosor = max(1.5, (row['Kilos'] / max_kilos) * 8)
-                            color_linea = '#FFCC00' if tipo_p == 'CMV' else 'cyan'
-                            
-                            # Línea vectorizada entre Origen y Destino
-                            cliente_line = f"<br>Cliente: {row.get('Cliente', 'N/A')}" if row.get('Cliente') else ''
-                            texto_linea = f"Tramo: {o_name} ➡️ {d_name}<br>Volumen: {row['Kilos']:,.0f} Kg ({tipo_p}){cliente_line}"
-                            fig_mapa.add_trace(go.Scattergeo(
-                                    lon = [coord_orig['lon'], coord_dest['lon']],
-                                    lat = [coord_orig['lat'], coord_dest['lat']],
-                                    mode = 'lines', #'lines+markers',
-                                    line = dict(width = grosor, color = color_linea),
-                                    #marker = dict(size = 4, color = 'orange'),
-                                    hoverinfo = 'text',
-                                    text = texto_linea,
-                                    showlegend = False
-                                ))
-                            
-                        # C. Nodos, Pins de Clientes y Brillo por Volumen
-                        for local_name, total_kg in volumen_por_localidad.items():
-                            if local_name in COORDENADAS:
-                                c = COORDENADAS[local_name]
-                                is_cliente = local_name.startswith("CLI_")
-                                label_mapa = c.get("display_name", local_name)
-                                
-                                if total_kg >= 100000 and not is_cliente:
-                                    fig_mapa.add_trace(go.Scattergeo(
-                                        lon = [c['lon']], lat = [c['lat']], mode = 'markers',
-                                        marker = dict(size = 22, color = 'rgba(0, 255, 102, 0.35)', line = dict(width = 1.5, color = '#00FF66')),
-                                        hoverinfo = 'skip', showlegend = False
-                                    ))
-                                
-                                if is_cliente:
-                                    color_nodo, tamaño_nodo = '#EFF542', 7
-                                else:
-                                    color_nodo = '#00FF66' if total_kg >= 100000 else 'orange'
-                                    tamaño_nodo = 10 if total_kg >= 100000 else 6
-                                
-                                fig_mapa.add_trace(go.Scattergeo(
-                                    lon = [c['lon']], lat = [c['lat']], mode = 'markers',
-                                    marker = dict(size = tamaño_nodo, color = color_nodo), hoverinfo = 'text',
-                                    hovertext = f"{label_mapa}<br>Volumen Acumulado: {total_kg:,.0f} Kg", showlegend = False
-                                ))
-
-                    # 2. Configurar la estética del Layout (Límites de provincias en VERDE, Fondo NEGRO)
-                    if lats_activas and lons_activas:
-                        margen = 5 # Grados de holgura alrededor del flujo
-                        min_lat, max_lat = min(lats_activas) - margen, max(lats_activas) + margen
-                        min_lon, max_lon = min(lons_activas) - margen, max(lons_activas) + margen
-                    else:
-                        # Valores por defecto si falla el cálculo
-                        min_lat, max_lat = -56.0, -21.0
-                        min_lon, max_lon = -75.0, -52.0
-                    
-                    fig_mapa.update_layout(
-                        title_text = f"Flujo Geográfico Acumulado hasta {mes_seleccionado} (Kilos)",
-                        showlegend = False,
-                        height = 700,
-                        margin = dict(l=0, r=0, t=40, b=0),
-                        geo = dict(
-                            scope = 'south america',
-                            resolution = 50,
-                            showframe = False,
-                            showcoastlines = True,
-                            coastlinecolor = '#1e7e34',  # Costa verde oscura
-                            showland = True,
-                            landcolor = '#000000',      # Superficie terrestre negra
-                            showlakes = True,
-                            showsubunits = True if not geojson_provincias else False, # Solo mostramos límites si no tenemos el GeoJSON para dibujarlos
-                            #subunitcolor = '#00FF66',   # Verde brillante/eléctrico de alto contraste
-                            subunitcolor = '#1e7e34', # Color de contorno provincial nativo para el Plan B
-                            subunitwidth = 3,         # Grosor de la línea del límite interprovincial
-                            lonaxis = dict(range=[min_lon, max_lon]), # Rango dinámico calculado
-                            lataxis = dict(range=[min_lat, max_lat]), # Rango dinámico calculado
-                            bgcolor = '#000000'         # Fondo general del recuadro negro
-                        )
-                    )
-
-                    # --- RENDERIZADO EN STREAMLIT ---
-                    st.subheader("Mapa de Rutas Activas")
-                    st.plotly_chart(fig_mapa, use_container_width=True)
-
                     st.markdown("##### Resumen de Tramos Geográficos")
-                    df_tabla_geo = df_mapa_consolidado.copy()
-                    if 'Cliente' in df_tabla_geo.columns:
-                        df_tabla_geo = df_tabla_geo[['Origen', 'Destino', 'Cliente', 'TP', 'Kilos']]
-                    else:
-                        df_tabla_geo = df_tabla_geo[['Origen', 'Destino', 'TP', 'Kilos']]
-                    st.dataframe(
-                        df_tabla_geo.sort_values(by='Kilos', ascending=False),
-                        hide_index=True,
-                        use_container_width=True,
-                        height=580,
-                        column_config={
-                            "Kilos": st.column_config.NumberColumn(
-                                "Kilos",
-                                format="%d"  # Muestra los separadores de miles estándar del navegador
-                            )
-                        }
-                    )
-
+                    
                 else:
                     # ==================================================================
                     # NUEVA LÓGICA: 
@@ -1355,6 +1183,15 @@ if archivo_cargado is not None:
                     
                     💡 *Propuesta Financiera:* Evaluar la contratación de un depósito tercerizado en esta área geográfica para consolidar fletes largos desde casa matriz en camiones completos y coordinar la entrega de 'última milla' localmente.
                     """)
+
+        # ------------------------------------------------------------------
+        # PANTALLA 4: Ubicación de depósitos
+        # ------------------------------------------------------------------
+        elif pantalla_activa == "🏭 Nuevos Depósitos":
+            st.subheader("📍 Análisis de Densidad de Entregas para Apertura de Hubs")
+            st.write("Análisis de concentración de Kilos despachados a zonas comerciales para justificar la apertura estratégica de depósitos regionales.")
+
+
 
     except Exception as e:
         st.error(f"Error procesando el archivo: {type(e).__name__}: {e}")
