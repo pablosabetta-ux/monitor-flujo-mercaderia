@@ -1543,8 +1543,8 @@ if archivo_cargado is not None:
             # Crear DataFrame con resultados de clustering
             df_cluster_results = pd.DataFrame({
                 'Cliente': nombres_clientes,
-                'Latitud': coordenadas_clientes[:, 0],
-                'Longitud': coordenadas_clientes[:, 1],
+                'Latitud': coords_array[:, 0],
+                'Longitud': coords_array[:, 1],
                 'Kilos': [kilos_por_cliente[c] for c in nombres_clientes],
                 'Cluster': clusters,
                 'Zona': ['NORTE' if c == cluster_norte else 'SUR' for c in clusters]
