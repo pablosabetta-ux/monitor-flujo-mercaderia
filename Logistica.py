@@ -432,6 +432,9 @@ if archivo_cargado is not None:
                             
                 orig, dest = None, None
                 cliente_display = None
+                lat_dest_debug = "N/A"
+                lon_dest_debug = "N/A"
+                localidad_display = "N/A"
                 dep_upper = normalizar_texto(dep.upper().strip())
                 remito_upper = normalizar_texto(remito.upper().strip())
 
@@ -481,7 +484,7 @@ if archivo_cargado is not None:
                                             "lat": clientes_dict[id_cliente]['lat'],
                                             "lon": clientes_dict[id_cliente]['lon'],
                                             "display_name": f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad'].upper()})",
-                                    }
+                                        }
                                 else:
                                     dest = f"ZONA {orig}"
                                     cliente_display = f"{id_cliente}"
@@ -521,11 +524,11 @@ if archivo_cargado is not None:
                             'Excel_Estado': estado_doc,
                             'Origen': orig,
                             'Destino': dest,
-                            'Display Name':f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad']})",
-                            'Latitud': clientes_dict[id_cliente]['lat'] if id_cliente in clientes_dict else None,
-                            'Longitud': clientes_dict[id_cliente]['lon'] if id_cliente in clientes_dict else None,
+                            'Display Name':f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad']})" if 'id_cliente' in locals() and id_cliente in clientes_dict else "N/A",
+                            'Latitud': clientes_dict[id_cliente]['lat'] if 'id_cliente' in locals() and id_cliente in clientes_dict else None,
+                            'Longitud': clientes_dict[id_cliente]['lon'] if 'id_cliente' in locals() and id_cliente in clientes_dict else None,
                             'Localidad display': localidad_display if apertura_cliente else None,
-                            'Localidad': clientes_dict[id_cliente]['localidad'] if id_cliente in clientes_dict else None
+                            'Localidad': clientes_dict[id_cliente]['localidad'] if 'id_cliente' in locals() and id_cliente in clientes_dict else None
                         })
 
                 elif tp == 'PRODUCC': 
@@ -555,6 +558,9 @@ if archivo_cargado is not None:
                         lat_dest_debug = COORDENADAS[dest_u]['lat']
                         lon_dest_debug = COORDENADAS[dest_u]['lon']
                         localidad_display = COORDENADAS[dest_u].get('display_name', dest)
+                    else:
+                        lat_dest_debug = "N/A"
+                        lon_dest_debug = "N/A"
 
 #---------------------------------------DEBUG
                     # Verificamos si existen en el diccionario para el mapa
@@ -1217,7 +1223,14 @@ if archivo_cargado is not None:
             reales recorridos. Los fletes con la misma fecha, origen y destino se consolidan en un único camión.
             """)
             
+            # Contenedor de progreso
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
             # 1. FUNCIÓN PARA CALCULAR DISTANCIA EN KM (Fórmula de Haversine)
+            status_text.text("⏳ Cargando función de cálculo de distancias...")
+            progress_bar.progress(10)
+            
             def calcular_distancia_km(lat1, lon1, lat2, lon2):
                 try:
                     if any(v == "N/A" or v == 0 or pd.isna(v) for v in [lat1, lon1, lat2, lon2]):
@@ -1236,6 +1249,9 @@ if archivo_cargado is not None:
                     return R * c
                 except:
                     return 0.0
+            
+            status_text.text("✅ Función de cálculo cargada")
+            progress_bar.progress(20)
 
             # 2. EXTRAER VIAJES INDIVIDUALES DESDE TU MATRIZ DE MAPA
             viajes_base = []
