@@ -855,10 +855,14 @@ if archivo_cargado is not None:
                         st.write(f"### 🎯 Impacto del Filtro Lateral: **{tipo_despacho}**")
 
                     # Consolidamos y agrupamos los flujos finales manteniendo la bandera de terceros
-                    df_flujo_mapa = df_mapa_filtrado.groupby(['Origen', 'Destino', 'TP', 'Es_Tercero'], as_index=False)['Kilos'].sum()
+                    if df_mapa_filtrado.empty:
+                        st.info("ℹ️ No hay rutas para mostrar con los filtros seleccionados.")
+                        df_flujo_mapa = pd.DataFrame()
+                    else:
+                        df_flujo_mapa = df_mapa_filtrado.groupby(['Origen', 'Destino', 'TP', 'Es_Tercero'], as_index=False)['Kilos'].sum()
                     
-                    # Agrupamos por Tipo de Movimiento para crear capas independientes en la leyenda
-                    for tipo_mov in df_flujo_mapa['TP'].unique():
+                    # Solo procesar si hay datos
+                    if not df_flujo_mapa.empty:
                         df_tipo = df_flujo_mapa[df_flujo_mapa['TP'] == tipo_mov]
                         
                         lats_lineas = []
@@ -896,16 +900,18 @@ if archivo_cargado is not None:
                                 lons_lineas.append(None)
                                 
                                 # Texto informativo para cuando pases el mouse por la ruta
+                                tipo_mov=df_mapa_filtrado['TP'].iloc[0] if 'TP' in df_mapa_filtrado.columns else "N/A"
                                 tag_txt = " (Tercero)" if es_tercero_linea else " (Directo)"
                                 cliente_line = f"<br>Cliente: {row.get('Cliente', 'N/A')}" if row.get('Cliente') else ''
                                 info_linea = f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}{tag_txt}{cliente_line}"
                                 textos_hover.append(info_linea)
 
+
                         # Definición de colores estratégicos por tipo de flujo
-                        color_linea = "#1707f0" if tipo_mov == "TRANSITO" else "#a4e905"
+                        color_linea = "#1707f0" if df_mapa_filtrado['TP'] == "TRANSITO" else "#a4e905"
                         nombre_traza = f"Flujos {tipo_mov}"
 
-                        if tipo_mov == "CMV":
+                        if df_mapa_filtrado['TP'] == "CMV":
                             if tipo_despacho == "Despachos de Terceros":
                                 color_linea = "#ece905"  # Púrpura para Terceros
                                 nombre_traza = "CMV - Terceros"
