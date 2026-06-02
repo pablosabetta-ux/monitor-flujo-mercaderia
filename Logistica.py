@@ -1254,16 +1254,12 @@ if archivo_cargado is not None:
             progress_bar.progress(20)
 
             # 2. EXTRAER VIAJES INDIVIDUALES DESDE TU MATRIZ DE MAPA
-            viajes_base = []
-            viajes_base = st.session_state['orig_dest_mapa']
+            viajes_base = list(st.session_state['orig_dest_mapa'])
+            viajes_reconstruidos = []
 
             if viajes_base:
-                df_viajes = pd.DataFrame(viajes_base)
-            
-                # Reconstruimos la información temporal asociando cada índice a su fila original
-                for v in st.session_state['orig_dest_mapa']:
-                    # Buscamos la fecha de la fila original en df_final usando el índice si es posible o una aproximación
-                    viajes_base.append({
+                for v in viajes_base:
+                    viajes_reconstruidos.append({
                         'Origen': v['Origen'],
                         'Destino': v['Destino'],
                         'Kilos': v['Kilos'],
@@ -1275,6 +1271,9 @@ if archivo_cargado is not None:
                         # Usamos una clave de camión combinando Origen y Destino (y fecha si estuviera disponible)
                         'Camion_ID': f"{v['Origen']}_{v['Destino']}"
                     })
+                df_viajes = pd.DataFrame(viajes_reconstruidos)
+            else:
+                df_viajes = pd.DataFrame([])
 
             if not viajes_base:
                 st.warning("⚠️ No hay datos válidos geolocalizados para realizar el análisis de costos. Revisá los filtros o el mapeo de clientes.")
