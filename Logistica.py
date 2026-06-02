@@ -784,75 +784,67 @@ if archivo_cargado is not None:
                 # ----- MAPA GEOGRÁFICO DE DEPÓSITOS (OPCIONAL) -----
                 st.subheader("🗺️ Representación Geográfica de Entregas")
                 
-                # 🎛️ El interruptor para cambiar de dimensión en tiempo real
-                modo_mapa = st.radio("Seleccioná la perspectiva del mapa:", ["Ver1", "Ver2"], horizontal=True)
-
-                if modo_mapa == "Ver1":
-                    
-                    st.markdown("##### Resumen de Tramos Geográficos")
-                    
+                # ==================================================================
+                # NUEVA LÓGICA: 
+                # ==================================================================
+                
+                fig = go.Figure()
+                
+                # Creamos una columna booleana para identificar los despachos de terceros de manera directa
+                if 'ESTADO' in df_flujo_mapa.columns:
+                    df_flujo_mapa['Es_Tercero'] = df_flujo_mapa['ESTADO'] == "R16a"
                 else:
+                    df_flujo_mapa['Es_Tercero'] = False
+                
+                # Aplicamos el filtro de la barra lateral directamente sobre la base de datos del mapa
+                df_mapa_filtrado = df_flujo_mapa.copy()
+
+                if tipo_despacho == "Despachos Directos":
+                    df_mapa_filtrado = df_mapa_filtrado[~((df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero']))]
+                elif tipo_despacho == "Despachos de Terceros":
+                    # Al aislar terceros, ocultamos tránsitos internos para limpiar por completo la red R16a
+                    df_mapa_filtrado = df_mapa_filtrado[(df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero'])]
+                
                     # ==================================================================
-                    # NUEVA LÓGICA: 
+                    # 🟢 PANEL DE DEBUG DINÁMICO (Ubicación Correcta Post-Filtro)
                     # ==================================================================
-                    
-                    fig = go.Figure()
-                    
-                    # Creamos una columna booleana para identificar los despachos de terceros de manera directa
-                    if 'ESTADO' in df_flujo_mapa.columns:
-                        df_flujo_mapa['Es_Tercero'] = df_flujo_mapa['ESTADO'] == "R16a"
-                    else:
-                        df_flujo_mapa['Es_Tercero'] = False
-                    
-                    # Aplicamos el filtro de la barra lateral directamente sobre la base de datos del mapa
-                    df_mapa_filtrado = df_flujo_mapa.copy()
+                    with st.expander("🔍 PANEL DE CONTROL & DEBUG (Auditoría en Tiempo Real)"):
+                        st.write(f"### 🎯 Estado actual del filtro lateral: **{tipo_despacho}**")
+                        
+                        st.metric(label="Filas que pasan al mapa de Plotly", value=len(df_mapa_filtrado))
+                        
+                        st.success(f"✅ Mostrando los primeros registros listos para graficar:")
+                        # Conteo para auditar qué tipos de documentos están sobreviviendo
+                        st.write("**Resumen por tipo de comprobante (ESTADO):**")
+                        st.dataframe(df_mapa_filtrado['ESTADO'].value_counts())
+                        
+                        if rastro_auditoria:
+                            st.write("### 🔬 Trazabilidad Vuelta por Vuelta (`for` loop)")
+                            st.write("Esta tabla muestra qué valor tenía cada variable interna en cada paso del procesamiento:")
+                            df_rastro = pd.DataFrame(rastro_auditoria)
+                            st.dataframe(df_rastro, use_container_width=True)
 
-                    if tipo_despacho == "Despachos Directos":
-                        df_mapa_filtrado = df_mapa_filtrado[~((df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero']))]
-                    elif tipo_despacho == "Despachos de Terceros":
-                        # Al aislar terceros, ocultamos tránsitos internos para limpiar por completo la red R16a
-                        df_mapa_filtrado = df_mapa_filtrado[(df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero'])]
-                    
-                        # ==================================================================
-                        # 🟢 PANEL DE DEBUG DINÁMICO (Ubicación Correcta Post-Filtro)
-                        # ==================================================================
-                        with st.expander("🔍 PANEL DE CONTROL & DEBUG (Auditoría en Tiempo Real)"):
-                            st.write(f"### 🎯 Estado actual del filtro lateral: **{tipo_despacho}**")
+                        if 'rastro_coordenadas_debug' in locals() and rastro_coordenadas_debug:
+                            st.write("### 🌍 Auditoría Geográfica de Rutas (Filtro Plotly)")
+                            st.write("Esta tabla te muestra qué registros de la base cruzaron con éxito el diccionario de coordenadas y cuáles fueron rechazados:")
                             
-                            st.metric(label="Filas que pasan al mapa de Plotly", value=len(df_mapa_filtrado))
+                            df_debug_geo = pd.DataFrame(rastro_coordenadas_debug)
                             
-                            st.success(f"✅ Mostrando los primeros registros listos para graficar:")
-                            # Conteo para auditar qué tipos de documentos están sobreviviendo
-                            st.write("**Resumen por tipo de comprobante (ESTADO):**")
-                            st.dataframe(df_mapa_filtrado['ESTADO'].value_counts())
+                            # Buscador rápido dentro del debug para filtrar errores
+                            filtro_error = st.checkbox("Mostrar solo filas con errores de coordenadas", value=False)
+                            if filtro_error:
+                                df_debug_geo = df_debug_geo[df_debug_geo['Resultado_Validacion'].str.contains("❌")]
                             
-                            if rastro_auditoria:
-                                st.write("### 🔬 Trazabilidad Vuelta por Vuelta (`for` loop)")
-                                st.write("Esta tabla muestra qué valor tenía cada variable interna en cada paso del procesamiento:")
-                                df_rastro = pd.DataFrame(rastro_auditoria)
-                                st.dataframe(df_rastro, use_container_width=True)
-    
-                            if 'rastro_coordenadas_debug' in locals() and rastro_coordenadas_debug:
-                                st.write("### 🌍 Auditoría Geográfica de Rutas (Filtro Plotly)")
-                                st.write("Esta tabla te muestra qué registros de la base cruzaron con éxito el diccionario de coordenadas y cuáles fueron rechazados:")
-                                
-                                df_debug_geo = pd.DataFrame(rastro_coordenadas_debug)
-                                
-                                # Buscador rápido dentro del debug para filtrar errores
-                                filtro_error = st.checkbox("Mostrar solo filas con errores de coordenadas", value=False)
-                                if filtro_error:
-                                    df_debug_geo = df_debug_geo[df_debug_geo['Resultado_Validacion'].str.contains("❌")]
-                                
-                                st.dataframe(df_debug_geo, use_container_width=True, hide_index=True)
-                            else:
-                                st.info("No hay datos de auditoría geográfica procesados.")
+                            st.dataframe(df_debug_geo, use_container_width=True, hide_index=True)
+                        else:
+                            st.info("No hay datos de auditoría geográfica procesados.")
 
-                            st.markdown("---")
-                        # ==================================================================
+                        st.markdown("---")
+                    # ==================================================================
 
-                        # 2. Simulamos el impacto del filtro seleccionado en la barra lateral
-                        st.write("---")
-                        st.write(f"### 🎯 Impacto del Filtro Lateral: **{tipo_despacho}**")
+                    # 2. Simulamos el impacto del filtro seleccionado en la barra lateral
+                    st.write("---")
+                    st.write(f"### 🎯 Impacto del Filtro Lateral: **{tipo_despacho}**")
 
                     # Consolidamos y agrupamos los flujos finales manteniendo la bandera de terceros
                     if df_mapa_filtrado.empty:
