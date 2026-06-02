@@ -5,6 +5,7 @@ import time
 import requests
 import numpy as np
 import unicodedata
+from sklearn.cluster import KMeans
 
 def normalizar_texto(texto):
     """Quita tildes, espacios extra y pasa a mayúsculas de forma segura"""
@@ -174,7 +175,7 @@ if archivo_cargado is not None:
         # El selector principal que determina qué pantalla se dibuja a la derecha
         pantalla_activa = st.sidebar.radio(
             "Seleccioná la herramienta:",
-            ["📊 Monitoreo de Stock y Flujos", "📦 Consolidación de Viajes (Eficiencia)", "🏭 Análisis de Hubs (Nuevos Depósitos)", "🏭 Nuevos Depósitos"]
+            ["📊 Monitoreo de Stock y Flujos", "📦 Consolidación de Viajes (Eficiencia)", "🏭 Análisis de Hubs (Nuevos Depósitos)", "🏭 Nuevos Depósitos", "📍 Ubicación Óptima de Depósitos Regionales"]
         )
         
         st.sidebar.markdown("---")
@@ -1256,8 +1257,70 @@ if archivo_cargado is not None:
             status_text.text("✅ Función de cálculo cargada")
             progress_bar.progress(20)
 
-            # 2. EXTRAER VIAJES INDIVIDUALES DESDE TU MATRIZ DE MAPA
-            viajes_base = list(st.session_state['orig_dest_mapa'])
+            # 2. EXTRAER VIAJES INDIVIDUALES DESDE TU MATRIZ DE MAPA (SIN FILTRO DE PRODUCTO - TODOS LOS ARTÍCULOS)
+            # Reconstruimos los viajes desde df_base completo (sin filtros de familia/especie/artículo)
+            # para incluir el 100% de los movimientos comerciales en el análisis de costos
+            
+            viajes_base_sin_filtro = []
+            
+            # Procesamos CMV (ventas) desde df_base para asegurar cobertura total
+            df_cmv = df_base[df_base['TP'] == 'CMV'].copy()
+            df_cmv['Kilos_Abs'] = df_cmv['Cantidad'].abs()
+            
+            for idx, row in df_cmv.iterrows():
+                dep = str(row['DEPOSITO']).strip().upper()
+                remito = str(row['NOMBRE']).strip()
+                kg_abs = float(row['Kilos_Abs'])
+                
+                if dep == "DESCONOCIDO" or remito in ["NAN", ""]:
+                    continue
+                
+                id_cliente = normalizar_texto(remito.upper().strip())
+                localidad_cliente = dict_remitos_localidad.get(id_cliente, f"Zona {dep}")
+                es_fleteprop = False
+                
+                # Detectamos si es flete propio
+                if id_cliente in clientes_dict:
+                    es_fleteprop = clientes_dict[id_cliente].get("flete_prop", "NO") == "SI"
+                
+                # Asegurar coordenadas para origen y destino
+                if dep in COORDENADAS:
+                    lat_orig = COORDENADAS[dep]['lat']
+                    lon_orig = COORDENADAS[dep]['lon']
+                else:
+                    continue
+                
+                # Coordenadas destino
+                if localidad_cliente in COORDENADAS:
+                    lat_dest = COORDENADAS[localidad_cliente]['lat']
+                    lon_dest = COORDENADAS[localidad_cliente]['lon']
+                elif localidad_cliente in dict_coordenadas_clientes:
+                    lat_dest = dict_coordenadas_clientes[localidad_cliente]['LAT']
+                    lon_dest = dict_coordenadas_clientes[localidad_cliente]['LONG']
+                else:
+                    if id_cliente in clientes_dict:
+                        lat_dest = clientes_dict[id_cliente]['lat']
+                        lon_dest = clientes_dict[id_cliente]['lon']
+                    else:
+                        continue
+                
+                viajes_base_sin_filtro.append({
+                    'Origen': dep,
+                    'Destino': localidad_cliente.upper(),
+                    'Kilos': kg_abs,
+                    'LAT_ORIG': lat_orig,
+                    'LON_ORIG': lon_orig,
+                    'LAT_DEST': lat_dest,
+                    'LON_DEST': lon_dest,
+                    'Remito': remito,
+                    'FleteProp': es_fleteprop,
+                    'Camion_ID': f"{dep}_{localidad_cliente.upper()}"
+                })
+            
+            if not viajes_base_sin_filtro:
+                viajes_base_sin_filtro = list(st.session_state['orig_dest_mapa'])
+            
+            viajes_base = viajes_base_sin_filtro
             viajes_reconstruidos = []
 
             if viajes_base:
@@ -1319,6 +1382,14 @@ if archivo_cargado is not None:
 
                     # Asignamos el costo proporcional por viaje único de camión
                     df_camiones['Costo_Viaje_Proporcional'] = df_camiones['Kilometros'] * costo_por_km
+
+                    # Distribuimos ese costo a cada fila de viaje según el peso llevado en el camión
+                    mapping_costo = df_camiones.set_index('Camion_ID')['Costo_Viaje_Proporcional']
+                    mapping_kilos_camion = df_camiones.set_index('Camion_ID')['Kilos']
+                    df_viajes['Costo_Viaje_Proporcional'] = (
+                        df_viajes['Camion_ID'].map(mapping_costo) *
+                        (df_viajes['Kilos'] / df_viajes['Camion_ID'].map(mapping_kilos_camion).replace(0, np.nan))
+                    ).fillna(0.0)
 
                     # 5. ASIGNACIÓN DE RANGOS DE 100 KMS
                     def asignar_rango(km):
@@ -1417,6 +1488,196 @@ if archivo_cargado is not None:
 
                             st.dataframe(df_detalle_remitos, use_container_width=True, hide_index=True)
 
+        # ------------------------------------------------------------------
+        # PANTALLA 5: UBICACIÓN ÓPTIMA DE DEPÓSITOS REGIONALES
+        # ------------------------------------------------------------------
+        elif pantalla_activa == "📍 Ubicación Óptima de Depósitos Regionales":
+            st.subheader("📍 Análisis de Clustering para Ubicación de Depósitos Regionales")
+            st.write("""
+            Este análisis utiliza K-Means clustering para identificar las ubicaciones óptimas de depósitos 
+            regionales en el norte y sur que minimicen distancias y costos logísticos.
+            """)
+            
+            # Extraer coordenadas de clientes
+            coordenadas_clientes = []
+            nombres_clientes = []
+            kilos_por_cliente = {}
+            
+            for idx, row in df_base[df_base['TP'] == 'CMV'].iterrows():
+                id_cliente = normalizar_texto(str(row['NOMBRE']).strip())
+                if id_cliente in clientes_dict:
+                    lat = clientes_dict[id_cliente]['lat']
+                    lon = clientes_dict[id_cliente]['lon']
+                    kg_abs = abs(float(row['Cantidad']))
+                    
+                    coordenadas_clientes.append([lat, lon])
+                    nombres_clientes.append(id_cliente)
+                    
+                    if id_cliente not in kilos_por_cliente:
+                        kilos_por_cliente[id_cliente] = 0
+                    kilos_por_cliente[id_cliente] += kg_abs
+            
+            if len(coordenadas_clientes) < 2:
+                st.error("Se necesitan al menos 2 clientes con coordenadas válidas para el análisis de clustering.")
+                st.stop()
+            
+            # K-Means clustering para 2 clusters (norte y sur)
+            coords_array = np.array(coordenadas_clientes)
+            kmeans = KMeans(n_clusters=2, random_state=42, n_init=10)
+            clusters = kmeans.fit_predict(coords_array)
+            
+            # Centroides calculados
+            centroides = kmeans.cluster_centers_
+            
+            # Depósito central de referencia (DLF RUTA 8)
+            if "RUTA 8" in COORDENADAS or "DLF RUTA 8" in COORDENADAS:
+                dlf_lat = COORDENADAS.get("RUTA 8", COORDENADAS.get("DLF RUTA 8", {})).get('lat', -34.6037)
+                dlf_lon = COORDENADAS.get("RUTA 8", COORDENADAS.get("DLF RUTA 8", {})).get('lon', -58.3816)
+            else:
+                dlf_lat, dlf_lon = -34.6037, -58.3816
+            
+            # Identificar norte y sur basado en latitud
+            cluster_norte = 0 if centroides[0][0] > centroides[1][0] else 1
+            cluster_sur = 1 if cluster_norte == 0 else 0
+            
+            # Crear DataFrame con resultados de clustering
+            df_cluster_results = pd.DataFrame({
+                'Cliente': nombres_clientes,
+                'Latitud': coordenadas_clientes[:, 0],
+                'Longitud': coordenadas_clientes[:, 1],
+                'Kilos': [kilos_por_cliente[c] for c in nombres_clientes],
+                'Cluster': clusters,
+                'Zona': ['NORTE' if c == cluster_norte else 'SUR' for c in clusters]
+            })
+            
+            # Crear mapa interactivo con Plotly
+            fig = go.Figure()
+            
+            # Clientes Norte
+            df_norte = df_cluster_results[df_cluster_results['Zona'] == 'NORTE']
+            fig.add_trace(go.Scattergeo(
+                lon=df_norte['Longitud'],
+                lat=df_norte['Latitud'],
+                mode='markers',
+                name='Clientes NORTE',
+                marker=dict(
+                    size=df_norte['Kilos'] / df_norte['Kilos'].max() * 15 + 5,
+                    color='#3498db',
+                    line=dict(width=1.5, color='white'),
+                    opacity=0.8
+                ),
+                text=[f"{row['Cliente']}<br>Kilos: {row['Kilos']:,.0f}" for _, row in df_norte.iterrows()],
+                hoverinfo='text'
+            ))
+            
+            # Clientes Sur
+            df_sur = df_cluster_results[df_cluster_results['Zona'] == 'SUR']
+            fig.add_trace(go.Scattergeo(
+                lon=df_sur['Longitud'],
+                lat=df_sur['Latitud'],
+                mode='markers',
+                name='Clientes SUR',
+                marker=dict(
+                    size=df_sur['Kilos'] / df_sur['Kilos'].max() * 15 + 5,
+                    color='#e74c3c',
+                    line=dict(width=1.5, color='white'),
+                    opacity=0.8
+                ),
+                text=[f"{row['Cliente']}<br>Kilos: {row['Kilos']:,.0f}" for _, row in df_sur.iterrows()],
+                hoverinfo='text'
+            ))
+            
+            # Centroides propuestos
+            fig.add_trace(go.Scattergeo(
+                lon=[centroides[cluster_norte][1], centroides[cluster_sur][1]],
+                lat=[centroides[cluster_norte][0], centroides[cluster_sur][0]],
+                mode='markers+text',
+                name='Centroides Propuestos',
+                marker=dict(size=15, color=['#2ecc71', '#f39c12'], symbol='star', line=dict(width=2, color='black')),
+                text=['📍 NORTE', '📍 SUR'],
+                textposition='top center',
+                hovertext=['Depósito Regional NORTE<br>Lat: {:.4f}<br>Lon: {:.4f}'.format(centroides[cluster_norte][0], centroides[cluster_norte][1]),
+                          'Depósito Regional SUR<br>Lat: {:.4f}<br>Lon: {:.4f}'.format(centroides[cluster_sur][0], centroides[cluster_sur][1])],
+                hoverinfo='text'
+            ))
+            
+            # Depósito Central Actual
+            fig.add_trace(go.Scattergeo(
+                lon=[dlf_lon],
+                lat=[dlf_lat],
+                mode='markers+text',
+                name='Depósito Central (DLF RUTA 8)',
+                marker=dict(size=20, color='#9b59b6', symbol='diamond', line=dict(width=2, color='white')),
+                text=['🏭 DLF'],
+                textposition='top center',
+                hovertext=['Depósito Central<br>Lat: {:.4f}<br>Lon: {:.4f}'.format(dlf_lat, dlf_lon)],
+                hoverinfo='text'
+            ))
+            
+            fig.update_layout(
+                geo=dict(
+                    scope='south america',
+                    showframe=False,
+                    showcoastlines=True,
+                    coastlinecolor='#1e7e34',
+                    showland=True,
+                    landcolor='#f0f0f0',
+                    showlakes=True,
+                    bgcolor='#e8f4f8',
+                    center=dict(lat=-34.5, lon=-60.5),
+                    projection_scale=6
+                ),
+                height=700,
+                title_text="Mapa de Clustering de Clientes y Depósitos Regionales Propuestos"
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Métricas de análisis
+            st.write("### 📊 Análisis Detallado del Clustering")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Clientes NORTE", len(df_norte))
+                st.metric("Kilos NORTE", f"{df_norte['Kilos'].sum():,.0f} Kg")
+            
+            with col2:
+                st.metric("Clientes SUR", len(df_sur))
+                st.metric("Kilos SUR", f"{df_sur['Kilos'].sum():,.0f} Kg")
+            
+            with col3:
+                distancia_dlf_norte = calcular_distancia_km(dlf_lat, dlf_lon, centroides[cluster_norte][0], centroides[cluster_norte][1])
+                distancia_dlf_sur = calcular_distancia_km(dlf_lat, dlf_lon, centroides[cluster_sur][0], centroides[cluster_sur][1])
+                st.metric("Distancia DLF → NORTE", f"{distancia_dlf_norte:.1f} km")
+                st.metric("Distancia DLF → SUR", f"{distancia_dlf_sur:.1f} km")
+            
+            # Tabla de distribución por zona
+            st.write("### 🗺️ Distribución de Clientes por Zona")
+            st.dataframe(df_cluster_results, use_container_width=True, hide_index=True)
+            
+            # Recomendaciones
+            st.write("### 💡 Recomendaciones Estratégicas")
+            
+            rec_col1, rec_col2 = st.columns(2)
+            
+            with rec_col1:
+                st.info(f"""
+                **Depósito Regional NORTE (Propuesto)**
+                - Ubicación Óptima: Lat {centroides[cluster_norte][0]:.4f}, Lon {centroides[cluster_norte][1]:.4f}
+                - Clientes a servir: {len(df_norte)}
+                - Volumen total: {df_norte['Kilos'].sum():,.0f} Kg
+                - Distancia desde DLF: {distancia_dlf_norte:.1f} km
+                """)
+            
+            with rec_col2:
+                st.info(f"""
+                **Depósito Regional SUR (Propuesto)**
+                - Ubicación Óptima: Lat {centroides[cluster_sur][0]:.4f}, Lon {centroides[cluster_sur][1]:.4f}
+                - Clientes a servir: {len(df_sur)}
+                - Volumen total: {df_sur['Kilos'].sum():,.0f} Kg
+                - Distancia desde DLF: {distancia_dlf_sur:.1f} km
+                """)
 
     except Exception as e:
         st.error(f"Error procesando el archivo: {type(e).__name__}: {e}")
