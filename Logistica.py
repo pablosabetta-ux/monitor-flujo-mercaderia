@@ -435,6 +435,7 @@ if archivo_cargado is not None:
                 lat_dest_debug = "N/A"
                 lon_dest_debug = "N/A"
                 localidad_display = "N/A"
+                es_fleteprop = False
                 dep_upper = normalizar_texto(dep.upper().strip())
                 remito_upper = normalizar_texto(remito.upper().strip())
 
@@ -463,6 +464,7 @@ if archivo_cargado is not None:
 
                                 if localidad_cliente and str(localidad_cliente).upper() != "NAN":
                                     if clientes_dict.get(id_cliente, {}).get("flete_prop", "NO") == "SI":
+                                        es_fleteprop = True
                                         # Desvío especial para clientes con flete propio:
                                         # el destino se toma como la localidad del depósito que despacha el viaje
                                         if dep_upper in COORDENADAS:
@@ -606,6 +608,7 @@ if archivo_cargado is not None:
                                 'Kilos': kg_abs,
                                 'TP': tp,
                                 'ESTADO': estado_doc,
+                                'FleteProp': es_fleteprop,
                                 'LAT_ORIG': COORDENADAS[orig_u]['lat'],
                                 'LON_ORIG': COORDENADAS[orig_u]['lon'],
                                 'LAT_DEST': lat_dest_debug,
@@ -1268,6 +1271,7 @@ if archivo_cargado is not None:
                         'LAT_DEST': v['LAT_DEST'],
                         'LON_DEST': v['LON_DEST'],
                         'Remito': v.get('Nro_Remito_Cuenta', 'S/D'), # Asegurar captura en el bucle principal
+                        'FleteProp': v.get('FleteProp', False),
                         # Usamos una clave de camión combinando Origen y Destino (y fecha si estuviera disponible)
                         'Camion_ID': f"{v['Origen']}_{v['Destino']}"
                     })
@@ -1278,12 +1282,24 @@ if archivo_cargado is not None:
             if not viajes_base:
                 st.warning("⚠️ No hay datos válidos geolocalizados para realizar el análisis de costos. Revisá los filtros o el mapeo de clientes.")
             else:
-                df_viajes = pd.DataFrame(viajes_base)
-
                 # Calcular la distancia de cada tramo
                 df_viajes['Kilometros'] = df_viajes.apply(
                     lambda r: calcular_distancia_km(r['LAT_ORIG'], r['LON_ORIG'], r['LAT_DEST'], r['LON_DEST']), axis=1
                 )
+
+                if 'Camion_ID' not in df_viajes.columns:
+                    st.error("No se encontró la columna Camion_ID en los datos de viajes. Revisa la lógica de construcción de orig_dest_mapa.")
+                    st.stop()
+
+                # Total de kilos FLETEPROP que no se prorratearán en el análisis de costos
+                kilos_fleteprop = df_viajes.loc[df_viajes['FleteProp'] == True, 'Kilos'].sum()
+                # Excluimos del cálculo de costos los viajes de flete propio
+                df_viajes = df_viajes[~df_viajes['FleteProp']].copy()
+
+                if df_viajes.empty:
+                    st.warning("⚠️ Todos los viajes geolocalizados son FLETEPROP y fueron excluidos del cálculo de costos.")
+                    st.info(f"Total de kilos FLETEPROP excluidos: {kilos_fleteprop:,.0f} Kg")
+                    st.stop()
 
                 # 3. CONSOLIDACIÓN POR CAMIÓN (Mismo Origen y Destino = 1 Solo Camión)
                 # Agrupamos para calcular los kilómetros totales de la flota instalada
@@ -1301,8 +1317,8 @@ if archivo_cargado is not None:
                     COSTO_TOTAL_PERIODO = 300000.0
                     costo_por_km = COSTO_TOTAL_PERIODO / kms_totales_flota
 
-                    # Asignamos el costo a cada viaje individual en base a sus kilómetros recorridos
-                    df_viajes['Costo_Viaje_Proporcional'] = df_viajes['Kilometros'] * costo_por_km
+                    # Asignamos el costo proporcional por viaje único de camión
+                    df_camiones['Costo_Viaje_Proporcional'] = df_camiones['Kilometros'] * costo_por_km
 
                     # 5. ASIGNACIÓN DE RANGOS DE 100 KMS
                     def asignar_rango(km):
@@ -1314,17 +1330,34 @@ if archivo_cargado is not None:
                         else: return "Más de 500 km"
 
                     df_viajes['Rango_Distancia'] = df_viajes['Kilometros'].apply(asignar_rango)
+                    df_camiones['Rango_Distancia'] = df_camiones['Kilometros'].apply(asignar_rango)
 
                     # 6. CONSOLIDACIÓN DE LA TABLA PRINCIPAL POR RANGO
                     # Para la cantidad de viajes reales (camiones), contamos los Camion_ID únicos por rango
                     tabla_rangos = df_viajes.groupby('Rango_Distancia').agg(
                         Kilos_Totales=('Kilos', 'sum'),
-                        Cantidad_Viajes=('Camion_ID', 'nunique'),
-                        Costo_Total=('Costo_Viaje_Proporcional', 'sum')
+                        Cantidad_Viajes=('Camion_ID', 'nunique')
                     ).reset_index()
 
+                    df_cost_rangos = df_camiones.groupby('Rango_Distancia', as_index=False)['Costo_Viaje_Proporcional'].sum()
+                    df_cost_rangos = df_cost_rangos.rename(columns={'Costo_Viaje_Proporcional': 'Costo_Total'})
+                    tabla_rangos = tabla_rangos.merge(df_cost_rangos, on='Rango_Distancia', how='left').fillna({'Costo_Total': 0.0})
+
                     # Costo unitario = Costo Total del rango / Kilos Totales del rango
-                    tabla_rangos['Costo_Unitario_USD_Kg'] = tabla_rangos['Costo_Total'] / tabla_rangos['Kilos_Totales']
+                    tabla_rangos['Costo_Unitario_USD_Kg'] = tabla_rangos.apply(
+                        lambda r: (r['Costo_Total'] / r['Kilos_Totales']) if r['Kilos_Totales'] > 0 else 0.0,
+                        axis=1
+                    )
+
+                    # Agregamos un totalizador al final para mostrar claramente el costo global
+                    totales = {
+                        'Rango_Distancia': 'TOTAL',
+                        'Kilos_Totales': tabla_rangos['Kilos_Totales'].sum(),
+                        'Cantidad_Viajes': tabla_rangos['Cantidad_Viajes'].sum(),
+                        'Costo_Total': tabla_rangos['Costo_Total'].sum(),
+                        'Costo_Unitario_USD_Kg': tabla_rangos['Costo_Total'].sum() / tabla_rangos['Kilos_Totales'].sum() if tabla_rangos['Kilos_Totales'].sum() > 0 else 0.0
+                    }
+                    tabla_rangos = pd.concat([tabla_rangos, pd.DataFrame([totales])], ignore_index=True)
 
                     # Ordenamos de menor a mayor distancia
                     orden_rangos = {"0 a 100 km": 1, "101 a 200 km": 2, "201 a 300 km": 3, "301 a 400 km": 4, "401 a 500 km": 5, "Más de 500 km": 6}
@@ -1351,6 +1384,12 @@ if archivo_cargado is not None:
                         use_container_width=True, 
                         hide_index=True
                     )
+
+                    total_costo_tabla = tabla_rangos.loc[tabla_rangos['Rango_Distancia'] == 'TOTAL', 'Costo_Total'].sum()
+                    st.markdown(f"**Total general de costo por rangos:** USD {total_costo_tabla:,.2f}  **(Presupuesto imputado: USD {COSTO_TOTAL_PERIODO:,.2f})**")
+                    st.info(f"Se excluyeron {kilos_fleteprop:,.0f} Kg de viajes FLETEPROP del prorrateo de costos.")
+                    if abs(total_costo_tabla - COSTO_TOTAL_PERIODO) > 0.01:
+                        st.warning(f"La suma total por rangos no coincide exactamente con el presupuesto. Diferencia: USD {total_costo_tabla - COSTO_TOTAL_PERIODO:,.2f}")
 
                     # 7. INTERFAZ REMITO POR REMITO (DESPLEGABLE INTERACTIVO)
                     st.write("### 🔍 Apertura al Detalle Remito por Remito")
