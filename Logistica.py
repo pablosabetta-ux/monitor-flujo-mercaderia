@@ -5,7 +5,6 @@ import time
 import requests
 import numpy as np
 import unicodedata
-from sklearn.cluster import KMeans
 
 def normalizar_texto(texto):
     """Quita tildes, espacios extra y pasa a mayúsculas de forma segura"""
@@ -14,16 +13,6 @@ def normalizar_texto(texto):
     # Descompone los caracteres acentuados (ej: Á -> A + tilde) y elimina la tilde
     texto_limpio = "".join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
     return texto_limpio.upper().strip()
-
-# Inicializamos la variable de control en el estado de la sesión si no existe
-if 'proceso_1_ejecutado' not in st.session_state:
-    st.session_state['proceso_1_ejecutado'] = False
-
-if 'orig_dest_mapa' not in st.session_state:
-    st.session_state['orig_dest_mapa'] = []
-
-if 'rastro_coordenadas_debug' not in st.session_state:
-    st.session_state['rastro_coordenadas_debug'] = []
 
 # Configuración de la página de Streamlit
 st.set_page_config(layout="wide", page_title="Análisis de Ineficiencias Logísticas")
@@ -175,7 +164,7 @@ if archivo_cargado is not None:
         # El selector principal que determina qué pantalla se dibuja a la derecha
         pantalla_activa = st.sidebar.radio(
             "Seleccioná la herramienta:",
-            ["📊 Monitoreo de Stock y Flujos", "📦 Consolidación de Viajes (Eficiencia)", "🏭 Análisis de Hubs (Nuevos Depósitos)", "🏭 Nuevos Depósitos", "📍 Ubicación Óptima de Depósitos Regionales"]
+            ["📊 Monitoreo de Stock y Flujos", "📦 Consolidación de Viajes (Eficiencia)", "🏭 Análisis de Hubs (Nuevos Depósitos)", "🏭 Nuevos Depósitos"]
         )
         
         st.sidebar.markdown("---")
@@ -317,9 +306,7 @@ if archivo_cargado is not None:
             transito_por_lote = dict(zip(ingresos_t['Lote_Clean'], ingresos_t['DEPOSITO']))
 
             orig_dest_sankey = []
-            st.session_state['orig_dest_mapa'] = []
-            st.session_state['rastro_coordenadas_debug'] = []
-
+                
             for idx, row in df_filtrado.iterrows():
                             
                 tp = str(row['TP']).strip()
@@ -381,6 +368,7 @@ if archivo_cargado is not None:
                 
                 # Si es FIN o no aplica, lo salteamos del flujo direccional
                 if orig and dest:
+
                     orig_dest_sankey.append({
                         'Fecha': row['Fecha'],
                         'Lote': row['NroLote'],
@@ -432,10 +420,6 @@ if archivo_cargado is not None:
                             
                 orig, dest = None, None
                 cliente_display = None
-                lat_dest_debug = "N/A"
-                lon_dest_debug = "N/A"
-                localidad_display = "N/A"
-                es_fleteprop = False
                 dep_upper = normalizar_texto(dep.upper().strip())
                 remito_upper = normalizar_texto(remito.upper().strip())
 
@@ -464,7 +448,6 @@ if archivo_cargado is not None:
 
                                 if localidad_cliente and str(localidad_cliente).upper() != "NAN":
                                     if clientes_dict.get(id_cliente, {}).get("flete_prop", "NO") == "SI":
-                                        es_fleteprop = True
                                         # Desvío especial para clientes con flete propio:
                                         # el destino se toma como la localidad del depósito que despacha el viaje
                                         if dep_upper in COORDENADAS:
@@ -486,7 +469,7 @@ if archivo_cargado is not None:
                                             "lat": clientes_dict[id_cliente]['lat'],
                                             "lon": clientes_dict[id_cliente]['lon'],
                                             "display_name": f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad'].upper()})",
-                                        }
+                                    }
                                 else:
                                     dest = f"ZONA {orig}"
                                     cliente_display = f"{id_cliente}"
@@ -526,11 +509,11 @@ if archivo_cargado is not None:
                             'Excel_Estado': estado_doc,
                             'Origen': orig,
                             'Destino': dest,
-                            'Display Name':f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad']})" if 'id_cliente' in locals() and id_cliente in clientes_dict else "N/A",
-                            'Latitud': clientes_dict[id_cliente]['lat'] if 'id_cliente' in locals() and id_cliente in clientes_dict else None,
-                            'Longitud': clientes_dict[id_cliente]['lon'] if 'id_cliente' in locals() and id_cliente in clientes_dict else None,
+                            'Display Name':f"Cliente: {id_cliente} ({clientes_dict[id_cliente]['localidad']})",
+                            'Latitud': clientes_dict[id_cliente]['lat'] if id_cliente in clientes_dict else None,
+                            'Longitud': clientes_dict[id_cliente]['lon'] if id_cliente in clientes_dict else None,
                             'Localidad display': localidad_display if apertura_cliente else None,
-                            'Localidad': clientes_dict[id_cliente]['localidad'] if 'id_cliente' in locals() and id_cliente in clientes_dict else None
+                            'Localidad': clientes_dict[id_cliente]['localidad'] if id_cliente in clientes_dict else None
                         })
 
                 elif tp == 'PRODUCC': 
@@ -560,11 +543,8 @@ if archivo_cargado is not None:
                         lat_dest_debug = COORDENADAS[dest_u]['lat']
                         lon_dest_debug = COORDENADAS[dest_u]['lon']
                         localidad_display = COORDENADAS[dest_u].get('display_name', dest)
-                    else:
-                        lat_dest_debug = "N/A"
-                        lon_dest_debug = "N/A"
 
-                    #---------------------------------------DEBUG
+#---------------------------------------DEBUG
                     # Verificamos si existen en el diccionario para el mapa
                     existe_origen = orig_u in COORDENADAS
                     #existe_destino = dest_u in COORDENADAS
@@ -584,7 +564,7 @@ if archivo_cargado is not None:
                     Lat_clie = COORDENADAS[dest_u].get('latitud', 'N/A') if existe_destino else "N/A"
                     Long_clie = COORDENADAS[dest_u].get('longitud', 'N/A') if existe_destino else "N/A"
                     
-                    st.session_state['rastro_coordenadas_debug'].append({
+                    rastro_coordenadas_debug.append({
                         'Fila_Excel': idx,
                         'Nro_Remito_Cuenta': remito,
                         'Origen': orig_u,
@@ -597,32 +577,29 @@ if archivo_cargado is not None:
                         'Latitud_Dest': lat_dest_debug,
                         'Longitud_Dest': lon_dest_debug  
                     })
-                
+                    
                     if existe_origen and existe_destino:
                         orig_display = COORDENADAS[orig_u].get('display_name', orig)
 
-                        st.session_state['orig_dest_mapa'].append({
+                        orig_dest_mapa.append({
                                 'Origen': orig_display.upper().strip(), 
                                 'Destino': str(dest).upper().strip(), 
                                 'Cliente': cliente_display if cliente_display else None,
                                 'Kilos': kg_abs,
                                 'TP': tp,
                                 'ESTADO': estado_doc,
-                                'FleteProp': es_fleteprop,
                                 'LAT_ORIG': COORDENADAS[orig_u]['lat'],
                                 'LON_ORIG': COORDENADAS[orig_u]['lon'],
                                 'LAT_DEST': lat_dest_debug,
-                                'LON_DEST': lon_dest_debug,
-                                'Nro_Remito_Cuenta': remito
-                        })
+                                'LON_DEST': lon_dest_debug
+                            })
 
                     volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
                     volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
 
-            if len(st.session_state['orig_dest_mapa']) > 0:
-                st.session_state['proceso_1_ejecutado'] = True
-    
             df_flujo_mapa = pd.DataFrame(orig_dest_mapa)
+
+            # --- DISPARO DE COMPONENTES EN PANTALLA ---
 
             # --- DETECCIÓN DE INEFICIENCIAS (RULOS POR LOTE) ---
             st.subheader("⚠️ Alertas de Ineficiencias y Rulos Logísticos")
@@ -756,6 +733,7 @@ if archivo_cargado is not None:
                     column_config=config_columnas
                 )
             
+            
                 # --- SECCIÓN ENMARCADA INFERIOR: MAPA GEOGRÁFICO ---
                 st.markdown("---")
             
@@ -777,213 +755,219 @@ if archivo_cargado is not None:
 
                 st.markdown("---")
 
-                # ----- MAPA GEOGRÁFICO DE DEPÓSITOS -----
+                # ----- MAPA GEOGRÁFICO DE DEPÓSITOS (OPCIONAL) -----
                 st.subheader("🗺️ Representación Geográfica de Entregas")
                 
-                fig = go.Figure()
-            
-                # Creamos una columna booleana para identificar los despachos de terceros de manera directa
-                if 'ESTADO' in df_flujo_mapa.columns:
-                    df_flujo_mapa['Es_Tercero'] = df_flujo_mapa['ESTADO'] == "R16a"
+                # 🎛️ El interruptor para cambiar de dimensión en tiempo real
+                modo_mapa = st.radio("Seleccioná la perspectiva del mapa:", ["Ver1", "Ver2"], horizontal=True)
+
+                if modo_mapa == "Ver1":
+                    
+                    st.markdown("##### Resumen de Tramos Geográficos")
+                    
                 else:
-                    df_flujo_mapa['Es_Tercero'] = False
-                
-                # Aplicamos el filtro de la barra lateral directamente sobre la base de datos del mapa
-                df_mapa_filtrado = df_flujo_mapa.copy()
-
-                if tipo_despacho == "Despachos Directos":
-                    df_mapa_filtrado = df_mapa_filtrado[~((df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero']))]
-                elif tipo_despacho == "Despachos de Terceros":
-                    # Al aislar terceros, ocultamos tránsitos internos para limpiar por completo la red R16a
-                    df_mapa_filtrado = df_mapa_filtrado[(df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero'])]
-                
                     # ==================================================================
-                    # 🟢 PANEL DE DEBUG DINÁMICO (Ubicación Correcta Post-Filtro)
+                    # NUEVA LÓGICA: 
                     # ==================================================================
-                    with st.expander("🔍 PANEL DE CONTROL & DEBUG (Auditoría en Tiempo Real)"):
-                        st.write(f"### 🎯 Estado actual del filtro lateral: **{tipo_despacho}**")
-                        
-                        st.metric(label="Filas que pasan al mapa de Plotly", value=len(df_mapa_filtrado))
-                        
-                        st.success(f"✅ Mostrando los primeros registros listos para graficar:")
-                        # Conteo para auditar qué tipos de documentos están sobreviviendo
-                        st.write("**Resumen por tipo de comprobante (ESTADO):**")
-                        st.dataframe(df_mapa_filtrado['ESTADO'].value_counts())
-                        
-                        if rastro_auditoria:
-                            st.write("### 🔬 Trazabilidad Vuelta por Vuelta (`for` loop)")
-                            st.write("Esta tabla muestra qué valor tenía cada variable interna en cada paso del procesamiento:")
-                            df_rastro = pd.DataFrame(rastro_auditoria)
-                            st.dataframe(df_rastro, use_container_width=True)
-
-                        if 'rastro_coordenadas_debug' in locals() and rastro_coordenadas_debug:
-                            st.write("### 🌍 Auditoría Geográfica de Rutas (Filtro Plotly)")
-                            st.write("Esta tabla te muestra qué registros de la base cruzaron con éxito el diccionario de coordenadas y cuáles fueron rechazados:")
-                            
-                            df_debug_geo = pd.DataFrame(rastro_coordenadas_debug)
-                            
-                            # Buscador rápido dentro del debug para filtrar errores
-                            filtro_error = st.checkbox("Mostrar solo filas con errores de coordenadas", value=False)
-                            if filtro_error:
-                                df_debug_geo = df_debug_geo[df_debug_geo['Resultado_Validacion'].str.contains("❌")]
-                            
-                            st.dataframe(df_debug_geo, use_container_width=True, hide_index=True)
-                        else:
-                            st.info("No hay datos de auditoría geográfica procesados.")
-
-                        st.markdown("---")
-                # ==================================================================
-
-                # 2. Simulamos el impacto del filtro seleccionado en la barra lateral
-                st.write("---")
-                st.write(f"### 🎯 Impacto del Filtro Lateral: **{tipo_despacho}**")
-
-            # Consolidamos y agrupamos los flujos finales manteniendo la bandera de terceros
-            if df_mapa_filtrado.empty:
-                st.info("ℹ️ No hay rutas para mostrar con los filtros seleccionados.")
-                df_flujo_mapa = pd.DataFrame()
-            else:
-                df_flujo_mapa = df_mapa_filtrado.groupby(['Origen', 'Destino', 'TP', 'Es_Tercero'], as_index=False)['Kilos'].sum()
-            
-            # Solo procesar si hay datos
-            if not df_flujo_mapa.empty:
-                df_tipo = df_flujo_mapa[df_flujo_mapa['TP'] == tipo_mov]
-                
-                lats_lineas = []
-                lons_lineas = []
-                textos_hover = []
-                
-                for idx, row in df_tipo.iterrows():
-                    orig = str(row['Origen'].upper().strip())
-                    dest = str(row['Destino'].upper().strip())
-                    kilos = row['Kilos']
-                    es_tercero_linea = row['Es_Tercero']
-                
-                    if orig in COORDENADAS and dest in COORDENADAS:
-                        c_orig = COORDENADAS[orig]
-                        c_dest = COORDENADAS[dest]
-                        
-                        # --- CÁLCULO DE ARCOS CURVOS PARA NO SUPERPONER LÍNEAS ---
-                        # Creamos 15 puntos intermedios entre el origen y el destino
-                        puntos = 15
-                        lats = np.linspace(c_orig['lat'], c_dest['lat'], puntos)
-                        lons = np.linspace(c_orig['lon'], c_dest['lon'], puntos)
-                        
-                        # Agregamos una distorsión matemática en forma de parábola (arco)
-                        distorsion = np.sin(np.linspace(0, np.pi, puntos)) * 0.15  # Ajustar el 0.15 para más/menos curva
-                        
-                        # Desviamos las coordenadas sutilmente para curvar la línea
-                        lats_curvas = lats + distorsion * (c_dest['lon'] - c_orig['lon']) * 0.2
-                        lons_curvas = lons - distorsion * (c_dest['lat'] - c_orig['lat']) * 0.2
-                        
-                        # Estructuramos los vectores para Plotly separando cada tramo con None
-                        for la, lo in zip(lats_curvas, lons_curvas):
-                            lats_lineas.append(la)
-                            lons_lineas.append(lo)
-                        lats_lineas.append(None)
-                        lons_lineas.append(None)
-                        
-                        # Texto informativo para cuando pases el mouse por la ruta
-                        tipo_mov=df_mapa_filtrado['TP'].iloc[0] if 'TP' in df_mapa_filtrado.columns else "N/A"
-                        tag_txt = " (Tercero)" if es_tercero_linea else " (Directo)"
-                        cliente_line = f"<br>Cliente: {row.get('Cliente', 'N/A')}" if row.get('Cliente') else ''
-                        info_linea = f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}{tag_txt}{cliente_line}"
-                        textos_hover.append(info_linea)
-
-
-                # Definición de colores estratégicos por tipo de flujo
-                color_linea = "#1707f0" if df_mapa_filtrado['TP'] == "TRANSITO" else "#a4e905"
-                nombre_traza = f"Flujos {tipo_mov}"
-
-                if df_mapa_filtrado['TP'] == "CMV":
-                    if tipo_despacho == "Despachos de Terceros":
-                        color_linea = "#ece905"  # Púrpura para Terceros
-                        nombre_traza = "CMV - Terceros"
-                    elif tipo_despacho == "Despachos Directos":
-                        color_linea = "#2df705"  # Naranja para Directos
-                        nombre_traza = "CMV - Directos"
+                    
+                    fig = go.Figure()
+                    
+                    # Creamos una columna booleana para identificar los despachos de terceros de manera directa
+                    if 'ESTADO' in df_flujo_mapa.columns:
+                        df_flujo_mapa['Es_Tercero'] = df_flujo_mapa['ESTADO'] == "R16a"
                     else:
-                        color_linea = "#fa0909"  # Naranja por defecto si muestra todos
-                        nombre_traza = "CMV (Todos)"
+                        df_flujo_mapa['Es_Tercero'] = False
                     
-                # Agregamos la capa de vectores al mapa
-                fig.add_trace(go.Scattergeo(
-                    lon = lons_lineas, lat = lats_lineas,
-                    mode = 'lines',
-                    name=nombre_traza,
-                    line = dict(width = 2, color = color_linea),
-                    opacity = 0.6,
-                    hoverinfo = 'text',
-                    text = textos_hover
-                ))
+                    # Aplicamos el filtro de la barra lateral directamente sobre la base de datos del mapa
+                    df_mapa_filtrado = df_flujo_mapa.copy()
 
-            # 2. Burbujas Dinámicas: Solo nodos ACTIVOS en el dataframe filtrado
-            # --- AGREGAR NODOS FIJOS COMO BURBUJAS DE VOLUMEN ---
-            # Dibujamos los puntos de las localidades para identificar los centros de masa
-            nodos_activos = set(pd.concat([df_flujo_mapa['Origen'], df_flujo_mapa['Destino']]).unique())
-            lats_nodos, lons_nodos, nombres_nodos, tamaños_nodos = [], [], [], []
-            
-            for nodo in nodos_activos:
-                nodo_upper = str(nodo).upper()
-                if nodo_upper in COORDENADAS:
-                    datos = COORDENADAS[nodo_upper]
-                    lats_nodos.append(datos['lat'])
-                    lons_nodos.append(datos['lon'])
-                    nombres_nodos.append(datos.get('display_name', nodo))
+                    if tipo_despacho == "Despachos Directos":
+                        df_mapa_filtrado = df_mapa_filtrado[~((df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero']))]
+                    elif tipo_despacho == "Despachos de Terceros":
+                        # Al aislar terceros, ocultamos tránsitos internos para limpiar por completo la red R16a
+                        df_mapa_filtrado = df_mapa_filtrado[(df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero'])]
+                    
+                        # ==================================================================
+                        # 🟢 PANEL DE DEBUG DINÁMICO (Ubicación Correcta Post-Filtro)
+                        # ==================================================================
+                        with st.expander("🔍 PANEL DE CONTROL & DEBUG (Auditoría en Tiempo Real)"):
+                            st.write(f"### 🎯 Estado actual del filtro lateral: **{tipo_despacho}**")
+                            
+                            st.metric(label="Filas que pasan al mapa de Plotly", value=len(df_mapa_filtrado))
+                            
+                            st.success(f"✅ Mostrando los primeros registros listos para graficar:")
+                            # Conteo para auditar qué tipos de documentos están sobreviviendo
+                            st.write("**Resumen por tipo de comprobante (ESTADO):**")
+                            st.dataframe(df_mapa_filtrado['ESTADO'].value_counts())
+                            
+                            if rastro_auditoria:
+                                st.write("### 🔬 Trazabilidad Vuelta por Vuelta (`for` loop)")
+                                st.write("Esta tabla muestra qué valor tenía cada variable interna en cada paso del procesamiento:")
+                                df_rastro = pd.DataFrame(rastro_auditoria)
+                                st.dataframe(df_rastro, use_container_width=True)
+    
+                            if 'rastro_coordenadas_debug' in locals() and rastro_coordenadas_debug:
+                                st.write("### 🌍 Auditoría Geográfica de Rutas (Filtro Plotly)")
+                                st.write("Esta tabla te muestra qué registros de la base cruzaron con éxito el diccionario de coordenadas y cuáles fueron rechazados:")
+                                
+                                df_debug_geo = pd.DataFrame(rastro_coordenadas_debug)
+                                
+                                # Buscador rápido dentro del debug para filtrar errores
+                                filtro_error = st.checkbox("Mostrar solo filas con errores de coordenadas", value=False)
+                                if filtro_error:
+                                    df_debug_geo = df_debug_geo[df_debug_geo['Resultado_Validacion'].str.contains("❌")]
+                                
+                                st.dataframe(df_debug_geo, use_container_width=True, hide_index=True)
+                            else:
+                                st.info("No hay datos de auditoría geográfica procesados.")
+
+                            st.markdown("---")
+                        # ==================================================================
+
+                        # 2. Simulamos el impacto del filtro seleccionado en la barra lateral
+                        st.write("---")
+                        st.write(f"### 🎯 Impacto del Filtro Lateral: **{tipo_despacho}**")
+
+                    # Consolidamos y agrupamos los flujos finales manteniendo la bandera de terceros
+                    df_flujo_mapa = df_mapa_filtrado.groupby(['Origen', 'Destino', 'TP', 'Es_Tercero'], as_index=False)['Kilos'].sum()
+                    
+                    # Agrupamos por Tipo de Movimiento para crear capas independientes en la leyenda
+                    for tipo_mov in df_flujo_mapa['TP'].unique():
+                        df_tipo = df_flujo_mapa[df_flujo_mapa['TP'] == tipo_mov]
                         
-                    # El tamaño responde de forma real a los kilos calculados (sin duplicar)
-                    kg_real = volumen_por_localidad.get(nodo_upper, 0)
-                    tamaño_dinamico = max(8, min(25, int(kg_real / 30000)+8)) if kg_real > 0 else 8
-                    tamaños_nodos.append(tamaño_dinamico)
+                        lats_lineas = []
+                        lons_lineas = []
+                        textos_hover = []
+                        
+                        for idx, row in df_tipo.iterrows():
+                            orig = str(row['Origen'].upper().strip())
+                            dest = str(row['Destino'].upper().strip())
+                            kilos = row['Kilos']
+                            es_tercero_linea = row['Es_Tercero']
+                      
+                            if orig in COORDENADAS and dest in COORDENADAS:
+                                c_orig = COORDENADAS[orig]
+                                c_dest = COORDENADAS[dest]
+                                
+                                # --- CÁLCULO DE ARCOS CURVOS PARA NO SUPERPONER LÍNEAS ---
+                                # Creamos 15 puntos intermedios entre el origen y el destino
+                                puntos = 15
+                                lats = np.linspace(c_orig['lat'], c_dest['lat'], puntos)
+                                lons = np.linspace(c_orig['lon'], c_dest['lon'], puntos)
+                                
+                                # Agregamos una distorsión matemática en forma de parábola (arco)
+                                distorsion = np.sin(np.linspace(0, np.pi, puntos)) * 0.15  # Ajustar el 0.15 para más/menos curva
+                                
+                                # Desviamos las coordenadas sutilmente para curvar la línea
+                                lats_curvas = lats + distorsion * (c_dest['lon'] - c_orig['lon']) * 0.2
+                                lons_curvas = lons - distorsion * (c_dest['lat'] - c_orig['lat']) * 0.2
+                                
+                                # Estructuramos los vectores para Plotly separando cada tramo con None
+                                for la, lo in zip(lats_curvas, lons_curvas):
+                                    lats_lineas.append(la)
+                                    lons_lineas.append(lo)
+                                lats_lineas.append(None)
+                                lons_lineas.append(None)
+                                
+                                # Texto informativo para cuando pases el mouse por la ruta
+                                tag_txt = " (Tercero)" if es_tercero_linea else " (Directo)"
+                                cliente_line = f"<br>Cliente: {row.get('Cliente', 'N/A')}" if row.get('Cliente') else ''
+                                info_linea = f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}{tag_txt}{cliente_line}"
+                                textos_hover.append(info_linea)
 
-            if lats_nodos:
-                fig.add_trace(go.Scattergeo(
-                    lon=lons_nodos, lat=lats_nodos,
-                    mode='markers',
-                    name="Puntos Operativos Activos",
-                    marker=dict(size=tamaños_nodos, color='#2ecc71', line=dict(width=1.5, color='black')),
-                    text=nombres_nodos,
-                    hoverinfo='text'
-                ))
+                        # Definición de colores estratégicos por tipo de flujo
+                        color_linea = "#1707f0" if tipo_mov == "TRANSITO" else "#a4e905"
+                        nombre_traza = f"Flujos {tipo_mov}"
+
+                        if tipo_mov == "CMV":
+                            if tipo_despacho == "Despachos de Terceros":
+                                color_linea = "#ece905"  # Púrpura para Terceros
+                                nombre_traza = "CMV - Terceros"
+                            elif tipo_despacho == "Despachos Directos":
+                                color_linea = "#2df705"  # Naranja para Directos
+                                nombre_traza = "CMV - Directos"
+                            else:
+                                color_linea = "#fa0909"  # Naranja por defecto si muestra todos
+                                nombre_traza = "CMV (Todos)"
+                        
+                        # Agregamos la capa de vectores al mapa
+                        fig.add_trace(go.Scattergeo(
+                            lon = lons_lineas, lat = lats_lineas,
+                            mode = 'lines',
+                            name=nombre_traza,
+                            line = dict(width = 2, color = color_linea),
+                            opacity = 0.6,
+                            hoverinfo = 'text',
+                            text = textos_hover
+                        ))
+
+                    # 2. Burbujas Dinámicas: Solo nodos ACTIVOS en el dataframe filtrado
+                    # --- AGREGAR NODOS FIJOS COMO BURBUJAS DE VOLUMEN ---
+                    # Dibujamos los puntos de las localidades para identificar los centros de masa
+                    nodos_activos = set(pd.concat([df_flujo_mapa['Origen'], df_flujo_mapa['Destino']]).unique())
+                    lats_nodos, lons_nodos, nombres_nodos, tamaños_nodos = [], [], [], []
                     
-            fig.update_layout(
-                geo = dict(
-                    scope = 'south america',
-                    resolution = 50,
-                    showframe = False,
-                    showcoastlines = True,
-                    coastlinecolor = '#1e7e34',  # Costa verde oscura
-                    showland = True,
-                    landcolor = '#000000',      # Superficie terrestre negra
-                    showlakes = True,
-                    showsubunits = True if not geojson_provincias else False, # Solo mostramos límites si no tenemos el GeoJSON para dibujarlos
-                    subunitcolor = '#1e7e34', # Color de contorno provincial nativo para el Plan B
-                    subunitwidth = 3,         # Grosor de la línea del límite interprovincial
-                    bgcolor = '#000000',         # Fondo general del recuadro negro
-                    center = dict(lat=-34.5, lon=-60.5), # Centrado automático en la zona núcleo argentina
-                    projection_scale = 6
-                ),
-                margin = dict(l=0, r=0, t=30, b=0),
-                height = 600
-            )
+                    for nodo in nodos_activos:
+                        nodo_upper = str(nodo).upper()
+                        if nodo_upper in COORDENADAS:
+                            datos = COORDENADAS[nodo_upper]
+                            lats_nodos.append(datos['lat'])
+                            lons_nodos.append(datos['lon'])
+                            nombres_nodos.append(datos.get('display_name', nodo))
+                            
+                            # El tamaño responde de forma real a los kilos calculados (sin duplicar)
+                            kg_real = volumen_por_localidad.get(nodo_upper, 0)
+                            tamaño_dinamico = max(8, min(25, int(kg_real / 30000)+8)) if kg_real > 0 else 8
+                            tamaños_nodos.append(tamaño_dinamico)
 
-            # --- RENDERIZADO EN STREAMLIT ---
-            st.plotly_chart(fig, use_container_width=True)
+                    if lats_nodos:
+                        fig.add_trace(go.Scattergeo(
+                            lon=lons_nodos, lat=lats_nodos,
+                            mode='markers',
+                            name="Puntos Operativos Activos",
+                            marker=dict(size=tamaños_nodos, color='#2ecc71', line=dict(width=1.5, color='black')),
+                            text=nombres_nodos,
+                            hoverinfo='text'
+                        ))
+                        
+                    fig.update_layout(
+                        geo = dict(
+                            scope = 'south america',
+                            resolution = 50,
+                            showframe = False,
+                            showcoastlines = True,
+                            coastlinecolor = '#1e7e34',  # Costa verde oscura
+                            showland = True,
+                            landcolor = '#000000',      # Superficie terrestre negra
+                            showlakes = True,
+                            showsubunits = True if not geojson_provincias else False, # Solo mostramos límites si no tenemos el GeoJSON para dibujarlos
+                            subunitcolor = '#1e7e34', # Color de contorno provincial nativo para el Plan B
+                            subunitwidth = 3,         # Grosor de la línea del límite interprovincial
+                            bgcolor = '#000000',         # Fondo general del recuadro negro
+                            center = dict(lat=-34.5, lon=-60.5), # Centrado automático en la zona núcleo argentina
+                            projection_scale = 6
+                        ),
+                        margin = dict(l=0, r=0, t=30, b=0),
+                        height = 600
+                    )
 
-            st.markdown("##### Detalle de Viajes de la Capa Activa")
-            if 'Cliente' in df_flujo_mapa.columns:
-                df_detalle_tramos = df_flujo_mapa[['Origen', 'Destino', 'Cliente', 'TP', 'Kilos']].copy()
-            else:
-                df_detalle_tramos = df_flujo_mapa[['Origen', 'Destino', 'TP', 'Kilos']].copy()
-            st.dataframe(
-                df_detalle_tramos.sort_values(by='Kilos', ascending=False),
-                hide_index=True,
-                use_container_width=True,
-                height=420,
-                column_config={
-                    'Kilos': st.column_config.NumberColumn('Kilos', format='%d')
-                }
-            )
+                    # --- RENDERIZADO EN STREAMLIT ---
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    st.markdown("##### Detalle de Viajes de la Capa Activa")
+                    if 'Cliente' in df_flujo_mapa.columns:
+                        df_detalle_tramos = df_flujo_mapa[['Origen', 'Destino', 'Cliente', 'TP', 'Kilos']].copy()
+                    else:
+                        df_detalle_tramos = df_flujo_mapa[['Origen', 'Destino', 'TP', 'Kilos']].copy()
+                    st.dataframe(
+                        df_detalle_tramos.sort_values(by='Kilos', ascending=False),
+                        hide_index=True,
+                        use_container_width=True,
+                        height=420,
+                        column_config={
+                            'Kilos': st.column_config.NumberColumn('Kilos', format='%d')
+                        }
+                    )
 
         # ------------------------------------------------------------------
         # PANTALLA 2: EFICIENCIA DE VIAJES (Consolidación)
@@ -1204,470 +1188,10 @@ if archivo_cargado is not None:
         # PANTALLA 4: Ubicación de depósitos
         # ------------------------------------------------------------------
         elif pantalla_activa == "🏭 Nuevos Depósitos":
-            st.subheader("📍 Análisis de Densidad de Entregas y Costos por Rangos de Distancia")
-            
-            # 🛑 CANDADO DE SEGURIDAD
-            if not st.session_state['proceso_1_ejecutado']:
-                st.warning("⚠️ **Datos no disponibles:** Primero debés cargar el archivo Excel y ejecutar el procesamiento en la pantalla principal para estructurar la red logística.")
-                st.info("💡 *Instrucciones:* Seleccioná la pantalla **🗺️ Flujos de Kilos (Mapa)** en el menú izquierdo, subí tu archivo de movimientos y aplicá los filtros iniciales.")
-                st.stop() # <-- Frena el script acá para que no intente ejecutar las matemáticas de abajo y crashee
-            
-            st.write("""
-            Análisis financiero y logístico que distribuye el gasto total de **USD 300.000** en base a los kilómetros 
-            reales recorridos. Los fletes con la misma fecha, origen y destino se consolidan en un único camión.
-            """)
-            
-            # Contenedor de progreso
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            # 1. FUNCIÓN PARA CALCULAR DISTANCIA EN KM (Fórmula de Haversine)
-            status_text.text("⏳ Cargando función de cálculo de distancias...")
-            progress_bar.progress(10)
-            
-            def calcular_distancia_km(lat1, lon1, lat2, lon2):
-                try:
-                    if any(v == "N/A" or v == 0 or pd.isna(v) for v in [lat1, lon1, lat2, lon2]):
-                        return 0.0
-                    # Radio de la Tierra en km
-                    R = 6371.0
-                    
-                    rad_lat1, rad_lon1 = np.radians(float(lat1)), np.radians(float(lon1))
-                    rad_lat2, rad_lon2 = np.radians(float(lat2)), np.radians(float(lon2))
-                    
-                    dlat = rad_lat2 - rad_lat1
-                    dlon = rad_lon2 - rad_lon1
-                    
-                    a = np.sin(dlat / 2)**2 + np.cos(rad_lat1) * np.cos(rad_lat2) * np.sin(dlon / 2)**2
-                    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-                    return R * c
-                except:
-                    return 0.0
-            
-            status_text.text("✅ Función de cálculo cargada")
-            progress_bar.progress(20)
+            st.subheader("📍 Análisis de Densidad de Entregas para Apertura de Hubs")
+            st.write("Análisis de concentración de Kilos despachados a zonas comerciales para justificar la apertura estratégica de depósitos regionales.")
 
-            # 2. EXTRAER VIAJES INDIVIDUALES DESDE TU MATRIZ DE MAPA (SIN FILTRO DE PRODUCTO - TODOS LOS ARTÍCULOS)
-            # Reconstruimos los viajes desde df_base completo (sin filtros de familia/especie/artículo)
-            # para incluir el 100% de los movimientos comerciales en el análisis de costos
-            
-            viajes_base_sin_filtro = []
-            
-            # Procesamos CMV (ventas) desde df_base para asegurar cobertura total
-            df_cmv = df_base[df_base['TP'] == 'CMV'].copy()
-            df_cmv['Kilos_Abs'] = df_cmv['Cantidad'].abs()
-            
-            for idx, row in df_cmv.iterrows():
-                dep = str(row['DEPOSITO']).strip().upper()
-                remito = str(row['NOMBRE']).strip()
-                kg_abs = float(row['Kilos_Abs'])
-                
-                if dep == "DESCONOCIDO" or remito in ["NAN", ""]:
-                    continue
-                
-                id_cliente = normalizar_texto(remito.upper().strip())
-                localidad_cliente = dict_remitos_localidad.get(id_cliente, f"Zona {dep}")
-                es_fleteprop = False
-                
-                # Detectamos si es flete propio
-                if id_cliente in clientes_dict:
-                    es_fleteprop = clientes_dict[id_cliente].get("flete_prop", "NO") == "SI"
-                
-                # Asegurar coordenadas para origen y destino
-                if dep in COORDENADAS:
-                    lat_orig = COORDENADAS[dep]['lat']
-                    lon_orig = COORDENADAS[dep]['lon']
-                else:
-                    continue
-                
-                # Coordenadas destino
-                if localidad_cliente in COORDENADAS:
-                    lat_dest = COORDENADAS[localidad_cliente]['lat']
-                    lon_dest = COORDENADAS[localidad_cliente]['lon']
-                elif localidad_cliente in dict_coordenadas_clientes:
-                    lat_dest = dict_coordenadas_clientes[localidad_cliente]['LAT']
-                    lon_dest = dict_coordenadas_clientes[localidad_cliente]['LONG']
-                else:
-                    if id_cliente in clientes_dict:
-                        lat_dest = clientes_dict[id_cliente]['lat']
-                        lon_dest = clientes_dict[id_cliente]['lon']
-                    else:
-                        continue
-                
-                viajes_base_sin_filtro.append({
-                    'Origen': dep,
-                    'Destino': localidad_cliente.upper(),
-                    'Kilos': kg_abs,
-                    'LAT_ORIG': lat_orig,
-                    'LON_ORIG': lon_orig,
-                    'LAT_DEST': lat_dest,
-                    'LON_DEST': lon_dest,
-                    'Remito': remito,
-                    'FleteProp': es_fleteprop,
-                    'Camion_ID': f"{dep}_{localidad_cliente.upper()}"
-                })
-            
-            if not viajes_base_sin_filtro:
-                viajes_base_sin_filtro = list(st.session_state['orig_dest_mapa'])
-            
-            viajes_base = viajes_base_sin_filtro
-            viajes_reconstruidos = []
 
-            if viajes_base:
-                for v in viajes_base:
-                    viajes_reconstruidos.append({
-                        'Origen': v['Origen'],
-                        'Destino': v['Destino'],
-                        'Kilos': v['Kilos'],
-                        'LAT_ORIG': v['LAT_ORIG'],
-                        'LON_ORIG': v['LON_ORIG'],
-                        'LAT_DEST': v['LAT_DEST'],
-                        'LON_DEST': v['LON_DEST'],
-                        'Remito': v.get('Nro_Remito_Cuenta', 'S/D'), # Asegurar captura en el bucle principal
-                        'FleteProp': v.get('FleteProp', False),
-                        # Usamos una clave de camión combinando Origen y Destino (y fecha si estuviera disponible)
-                        'Camion_ID': f"{v['Origen']}_{v['Destino']}"
-                    })
-                df_viajes = pd.DataFrame(viajes_reconstruidos)
-            else:
-                df_viajes = pd.DataFrame([])
-
-            if not viajes_base:
-                st.warning("⚠️ No hay datos válidos geolocalizados para realizar el análisis de costos. Revisá los filtros o el mapeo de clientes.")
-            else:
-                # Calcular la distancia de cada tramo
-                df_viajes['Kilometros'] = df_viajes.apply(
-                    lambda r: calcular_distancia_km(r['LAT_ORIG'], r['LON_ORIG'], r['LAT_DEST'], r['LON_DEST']), axis=1
-                )
-
-                if 'Camion_ID' not in df_viajes.columns:
-                    st.error("No se encontró la columna Camion_ID en los datos de viajes. Revisa la lógica de construcción de orig_dest_mapa.")
-                    st.stop()
-
-                # Total de kilos FLETEPROP que no se prorratearán en el análisis de costos
-                kilos_fleteprop = df_viajes.loc[df_viajes['FleteProp'] == True, 'Kilos'].sum()
-                # Excluimos del cálculo de costos los viajes de flete propio
-                df_viajes = df_viajes[~df_viajes['FleteProp']].copy()
-
-                if df_viajes.empty:
-                    st.warning("⚠️ Todos los viajes geolocalizados son FLETEPROP y fueron excluidos del cálculo de costos.")
-                    st.info(f"Total de kilos FLETEPROP excluidos: {kilos_fleteprop:,.0f} Kg")
-                    st.stop()
-
-                # 3. CONSOLIDACIÓN POR CAMIÓN (Mismo Origen y Destino = 1 Solo Camión)
-                # Agrupamos para calcular los kilómetros totales de la flota instalada
-                df_camiones = df_viajes.groupby(['Camion_ID', 'Origen', 'Destino']).agg({
-                    'Kilometros': 'first', # La distancia del viaje es la misma
-                    'Kilos': 'sum'
-                }).reset_index()
-
-                kms_totales_flota = df_camiones['Kilometros'].sum()
-
-                if kms_totales_flota == 0:
-                    st.error("La distancia total calculada de los viajes es 0 km. No se puede prorratear el costo.")
-                else:
-                    # 4. CÁLCULO DEL COSTO POR KILÓMETRO (USD 300.000 / Kms Totales)
-                    COSTO_TOTAL_PERIODO = 300000.0
-                    costo_por_km = COSTO_TOTAL_PERIODO / kms_totales_flota
-
-                    # Asignamos el costo proporcional por viaje único de camión
-                    df_camiones['Costo_Viaje_Proporcional'] = df_camiones['Kilometros'] * costo_por_km
-
-                    # Distribuimos ese costo a cada fila de viaje según el peso llevado en el camión
-                    mapping_costo = df_camiones.set_index('Camion_ID')['Costo_Viaje_Proporcional']
-                    mapping_kilos_camion = df_camiones.set_index('Camion_ID')['Kilos']
-                    df_viajes['Costo_Viaje_Proporcional'] = (
-                        df_viajes['Camion_ID'].map(mapping_costo) *
-                        (df_viajes['Kilos'] / df_viajes['Camion_ID'].map(mapping_kilos_camion).replace(0, np.nan))
-                    ).fillna(0.0)
-
-                    # 5. ASIGNACIÓN DE RANGOS DE 100 KMS
-                    def asignar_rango(km):
-                        if km <= 100: return "0 a 100 km"
-                        elif km <= 200: return "101 a 200 km"
-                        elif km <= 300: return "201 a 300 km"
-                        elif km <= 400: return "301 a 400 km"
-                        elif km <= 500: return "401 a 500 km"
-                        else: return "Más de 500 km"
-
-                    df_viajes['Rango_Distancia'] = df_viajes['Kilometros'].apply(asignar_rango)
-                    df_camiones['Rango_Distancia'] = df_camiones['Kilometros'].apply(asignar_rango)
-
-                    # 6. CONSOLIDACIÓN DE LA TABLA PRINCIPAL POR RANGO
-                    # Para la cantidad de viajes reales (camiones), contamos los Camion_ID únicos por rango
-                    tabla_rangos = df_viajes.groupby('Rango_Distancia').agg(
-                        Kilos_Totales=('Kilos', 'sum'),
-                        Cantidad_Viajes=('Camion_ID', 'nunique')
-                    ).reset_index()
-
-                    df_cost_rangos = df_camiones.groupby('Rango_Distancia', as_index=False)['Costo_Viaje_Proporcional'].sum()
-                    df_cost_rangos = df_cost_rangos.rename(columns={'Costo_Viaje_Proporcional': 'Costo_Total'})
-                    tabla_rangos = tabla_rangos.merge(df_cost_rangos, on='Rango_Distancia', how='left').fillna({'Costo_Total': 0.0})
-
-                    # Costo unitario = Costo Total del rango / Kilos Totales del rango
-                    tabla_rangos['Costo_Unitario_USD_Kg'] = tabla_rangos.apply(
-                        lambda r: (r['Costo_Total'] / r['Kilos_Totales']) if r['Kilos_Totales'] > 0 else 0.0,
-                        axis=1
-                    )
-
-                    # Agregamos un totalizador al final para mostrar claramente el costo global
-                    totales = {
-                        'Rango_Distancia': 'TOTAL',
-                        'Kilos_Totales': tabla_rangos['Kilos_Totales'].sum(),
-                        'Cantidad_Viajes': tabla_rangos['Cantidad_Viajes'].sum(),
-                        'Costo_Total': tabla_rangos['Costo_Total'].sum(),
-                        'Costo_Unitario_USD_Kg': tabla_rangos['Costo_Total'].sum() / tabla_rangos['Kilos_Totales'].sum() if tabla_rangos['Kilos_Totales'].sum() > 0 else 0.0
-                    }
-                    tabla_rangos = pd.concat([tabla_rangos, pd.DataFrame([totales])], ignore_index=True)
-
-                    # Ordenamos de menor a mayor distancia
-                    orden_rangos = {"0 a 100 km": 1, "101 a 200 km": 2, "201 a 300 km": 3, "301 a 400 km": 4, "401 a 500 km": 5, "Más de 500 km": 6}
-                    tabla_rangos['Orden'] = tabla_rangos['Rango_Distancia'].map(orden_rangos)
-                    tabla_rangos = tabla_rangos.sort_values('Orden').drop(columns=['Orden'])
-
-                    # Métricas de cabecera financieras
-                    m1, m2, m3 = st.columns(3)
-                    m1.metric("💰 Presupuesto Total Fletes", f"USD {COSTO_TOTAL_PERIODO:,.0f}")
-                    m2.metric("🛣️ Kilómetros Totales Flota", f"{kms_totales_flota:,.1f} Km")
-                    m3.metric("💵 Costo por Km Promedio", f"USD {costo_por_km:,.2f} / Km")
-
-                    st.write("### 📊 Consolidado de Costos por Rangos de Distribución")
-                    
-                    # Formateo visual prolijo para la tabla resumen
-                    tabla_visual = tabla_rangos.copy()
-                    tabla_visual['Kilos Totales'] = tabla_visual['Kilos_Totales'].map('{:,.0f} Kg'.format)
-                    tabla_visual['Cantidad Viajes'] = tabla_visual['Cantidad_Viajes'].map('{:,.0f}'.format)
-                    tabla_visual['Costo Unitario (USD/Kg)'] = tabla_visual['Costo_Unitario_USD_Kg'].map('USD {:,.4f}'.format)
-                    tabla_visual['Costo Total Rango'] = tabla_visual['Costo_Total'].map('USD {:,.2f}'.format)
-                    
-                    st.dataframe(
-                        tabla_visual[['Rango_Distancia', 'Kilos Totales', 'Cantidad Viajes', 'Costo Unitario (USD/Kg)', 'Costo Total Rango']], 
-                        use_container_width=True, 
-                        hide_index=True
-                    )
-
-                    total_costo_tabla = tabla_rangos.loc[tabla_rangos['Rango_Distancia'] == 'TOTAL', 'Costo_Total'].sum()
-                    st.markdown(f"**Total general de costo por rangos:** USD {total_costo_tabla:,.2f}  **(Presupuesto imputado: USD {COSTO_TOTAL_PERIODO:,.2f})**")
-                    st.info(f"Se excluyeron {kilos_fleteprop:,.0f} Kg de viajes FLETEPROP del prorrateo de costos.")
-                    if abs(total_costo_tabla - COSTO_TOTAL_PERIODO) > 0.01:
-                        st.warning(f"La suma total por rangos no coincide exactamente con el presupuesto. Diferencia: USD {total_costo_tabla - COSTO_TOTAL_PERIODO:,.2f}")
-
-                    # 7. INTERFAZ REMITO POR REMITO (DESPLEGABLE INTERACTIVO)
-                    st.write("### 🔍 Apertura al Detalle Remito por Remito")
-                    st.caption("Hace clic en cada rango de distancia para auditar los documentos comerciales y camiones físicos afectados.")
-
-                    for rango in tabla_rangos['Rango_Distancia']:
-                        df_filtro_rango = df_viajes[df_viajes['Rango_Distancia'] == rango]
-                        
-                        with st.expander(f"📂 Ver detalle para el rango: {rango} ({len(df_filtro_rango)} registros de artículos)"):
-                            # Agrupamos por Remito/Cliente para mostrar el costo exacto asignado a ese documento comercial
-                            df_detalle_remitos = df_filtro_rango.groupby(['Remito', 'Origen', 'Destino']).agg({
-                                'Kilometros': 'first',
-                                'Kilos': 'sum',
-                                'Costo_Viaje_Proporcional': 'sum'
-                            }).reset_index()
-
-                            df_detalle_remitos['Costo_Unitario_Item'] = df_detalle_remitos['Costo_Viaje_Proporcional'] / df_detalle_remitos['Kilos']
-                            
-                            # Formateo estético del detalle interno
-                            df_detalle_remitos.columns = ['Nro Remito / Cuenta', 'Origen Físico', 'Localidad Destino', 'Km Recorridos', 'Kilos Totales', 'Costo Asignado (USD)', 'Costo Unitario (USD/Kg)']
-                            df_detalle_remitos['Km Recorridos'] = df_detalle_remitos['Km Recorridos'].map('{:,.1f} Km'.format)
-                            df_detalle_remitos['Kilos Totales'] = df_detalle_remitos['Kilos Totales'].map('{:,.0f} Kg'.format)
-                            df_detalle_remitos['Costo Asignado (USD)'] = df_detalle_remitos['Costo Asignado (USD)'].map('USD {:,.2f}'.format)
-                            df_detalle_remitos['Costo Unitario (USD/Kg)'] = df_detalle_remitos['Costo Unitario (USD/Kg)'].map('USD {:,.4f}'.format)
-
-                            st.dataframe(df_detalle_remitos, use_container_width=True, hide_index=True)
-
-        # ------------------------------------------------------------------
-        # PANTALLA 5: UBICACIÓN ÓPTIMA DE DEPÓSITOS REGIONALES
-        # ------------------------------------------------------------------
-        elif pantalla_activa == "📍 Ubicación Óptima de Depósitos Regionales":
-            st.subheader("📍 Análisis de Clustering para Ubicación de Depósitos Regionales")
-            st.write("""
-            Este análisis utiliza K-Means clustering para identificar las ubicaciones óptimas de depósitos 
-            regionales en el norte y sur que minimicen distancias y costos logísticos.
-            """)
-            
-            # Extraer coordenadas de clientes
-            coordenadas_clientes = []
-            nombres_clientes = []
-            kilos_por_cliente = {}
-            
-            for idx, row in df_base[df_base['TP'] == 'CMV'].iterrows():
-                id_cliente = normalizar_texto(str(row['NOMBRE']).strip())
-                if id_cliente in clientes_dict:
-                    lat = clientes_dict[id_cliente]['lat']
-                    lon = clientes_dict[id_cliente]['lon']
-                    kg_abs = abs(float(row['Cantidad']))
-                    
-                    coordenadas_clientes.append([lat, lon])
-                    nombres_clientes.append(id_cliente)
-                    
-                    if id_cliente not in kilos_por_cliente:
-                        kilos_por_cliente[id_cliente] = 0
-                    kilos_por_cliente[id_cliente] += kg_abs
-            
-            if len(coordenadas_clientes) < 2:
-                st.error("Se necesitan al menos 2 clientes con coordenadas válidas para el análisis de clustering.")
-                st.stop()
-            
-            # K-Means clustering para 2 clusters (norte y sur)
-            coords_array = np.array(coordenadas_clientes)
-            kmeans = KMeans(n_clusters=2, random_state=42, n_init=10)
-            clusters = kmeans.fit_predict(coords_array)
-            
-            # Centroides calculados
-            centroides = kmeans.cluster_centers_
-            
-            # Depósito central de referencia (DLF RUTA 8)
-            if "RUTA 8" in COORDENADAS or "DLF RUTA 8" in COORDENADAS:
-                dlf_lat = COORDENADAS.get("RUTA 8", COORDENADAS.get("DLF RUTA 8", {})).get('lat', -34.6037)
-                dlf_lon = COORDENADAS.get("RUTA 8", COORDENADAS.get("DLF RUTA 8", {})).get('lon', -58.3816)
-            else:
-                dlf_lat, dlf_lon = -34.6037, -58.3816
-            
-            # Identificar norte y sur basado en latitud
-            cluster_norte = 0 if centroides[0][0] > centroides[1][0] else 1
-            cluster_sur = 1 if cluster_norte == 0 else 0
-            
-            # Crear DataFrame con resultados de clustering
-            df_cluster_results = pd.DataFrame({
-                'Cliente': nombres_clientes,
-                'Latitud': coords_array[:, 0],
-                'Longitud': coords_array[:, 1],
-                'Kilos': [kilos_por_cliente[c] for c in nombres_clientes],
-                'Cluster': clusters,
-                'Zona': ['NORTE' if c == cluster_norte else 'SUR' for c in clusters]
-            })
-            
-            # Crear mapa interactivo con Plotly
-            fig = go.Figure()
-            
-            # Clientes Norte
-            df_norte = df_cluster_results[df_cluster_results['Zona'] == 'NORTE']
-            fig.add_trace(go.Scattergeo(
-                lon=df_norte['Longitud'],
-                lat=df_norte['Latitud'],
-                mode='markers',
-                name='Clientes NORTE',
-                marker=dict(
-                    size=df_norte['Kilos'] / df_norte['Kilos'].max() * 15 + 5,
-                    color='#3498db',
-                    line=dict(width=1.5, color='white'),
-                    opacity=0.8
-                ),
-                text=[f"{row['Cliente']}<br>Kilos: {row['Kilos']:,.0f}" for _, row in df_norte.iterrows()],
-                hoverinfo='text'
-            ))
-            
-            # Clientes Sur
-            df_sur = df_cluster_results[df_cluster_results['Zona'] == 'SUR']
-            fig.add_trace(go.Scattergeo(
-                lon=df_sur['Longitud'],
-                lat=df_sur['Latitud'],
-                mode='markers',
-                name='Clientes SUR',
-                marker=dict(
-                    size=df_sur['Kilos'] / df_sur['Kilos'].max() * 15 + 5,
-                    color='#e74c3c',
-                    line=dict(width=1.5, color='white'),
-                    opacity=0.8
-                ),
-                text=[f"{row['Cliente']}<br>Kilos: {row['Kilos']:,.0f}" for _, row in df_sur.iterrows()],
-                hoverinfo='text'
-            ))
-            
-            # Centroides propuestos
-            fig.add_trace(go.Scattergeo(
-                lon=[centroides[cluster_norte][1], centroides[cluster_sur][1]],
-                lat=[centroides[cluster_norte][0], centroides[cluster_sur][0]],
-                mode='markers+text',
-                name='Centroides Propuestos',
-                marker=dict(size=15, color=['#2ecc71', '#f39c12'], symbol='star', line=dict(width=2, color='black')),
-                text=['📍 NORTE', '📍 SUR'],
-                textposition='top center',
-                hovertext=['Depósito Regional NORTE<br>Lat: {:.4f}<br>Lon: {:.4f}'.format(centroides[cluster_norte][0], centroides[cluster_norte][1]),
-                          'Depósito Regional SUR<br>Lat: {:.4f}<br>Lon: {:.4f}'.format(centroides[cluster_sur][0], centroides[cluster_sur][1])],
-                hoverinfo='text'
-            ))
-            
-            # Depósito Central Actual
-            fig.add_trace(go.Scattergeo(
-                lon=[dlf_lon],
-                lat=[dlf_lat],
-                mode='markers+text',
-                name='Depósito Central (DLF RUTA 8)',
-                marker=dict(size=20, color='#9b59b6', symbol='diamond', line=dict(width=2, color='white')),
-                text=['🏭 DLF'],
-                textposition='top center',
-                hovertext=['Depósito Central<br>Lat: {:.4f}<br>Lon: {:.4f}'.format(dlf_lat, dlf_lon)],
-                hoverinfo='text'
-            ))
-            
-            fig.update_layout(
-                geo=dict(
-                    scope='south america',
-                    showframe=False,
-                    showcoastlines=True,
-                    coastlinecolor='#1e7e34',
-                    showland=True,
-                    landcolor='#f0f0f0',
-                    showlakes=True,
-                    bgcolor='#e8f4f8',
-                    center=dict(lat=-34.5, lon=-60.5),
-                    projection_scale=6
-                ),
-                height=700,
-                title_text="Mapa de Clustering de Clientes y Depósitos Regionales Propuestos"
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Métricas de análisis
-            st.write("### 📊 Análisis Detallado del Clustering")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Clientes NORTE", len(df_norte))
-                st.metric("Kilos NORTE", f"{df_norte['Kilos'].sum():,.0f} Kg")
-            
-            with col2:
-                st.metric("Clientes SUR", len(df_sur))
-                st.metric("Kilos SUR", f"{df_sur['Kilos'].sum():,.0f} Kg")
-            
-            with col3:
-                distancia_dlf_norte = calcular_distancia_km(dlf_lat, dlf_lon, centroides[cluster_norte][0], centroides[cluster_norte][1])
-                distancia_dlf_sur = calcular_distancia_km(dlf_lat, dlf_lon, centroides[cluster_sur][0], centroides[cluster_sur][1])
-                st.metric("Distancia DLF → NORTE", f"{distancia_dlf_norte:.1f} km")
-                st.metric("Distancia DLF → SUR", f"{distancia_dlf_sur:.1f} km")
-            
-            # Tabla de distribución por zona
-            st.write("### 🗺️ Distribución de Clientes por Zona")
-            st.dataframe(df_cluster_results, use_container_width=True, hide_index=True)
-            
-            # Recomendaciones
-            st.write("### 💡 Recomendaciones Estratégicas")
-            
-            rec_col1, rec_col2 = st.columns(2)
-            
-            with rec_col1:
-                st.info(f"""
-                **Depósito Regional NORTE (Propuesto)**
-                - Ubicación Óptima: Lat {centroides[cluster_norte][0]:.4f}, Lon {centroides[cluster_norte][1]:.4f}
-                - Clientes a servir: {len(df_norte)}
-                - Volumen total: {df_norte['Kilos'].sum():,.0f} Kg
-                - Distancia desde DLF: {distancia_dlf_norte:.1f} km
-                """)
-            
-            with rec_col2:
-                st.info(f"""
-                **Depósito Regional SUR (Propuesto)**
-                - Ubicación Óptima: Lat {centroides[cluster_sur][0]:.4f}, Lon {centroides[cluster_sur][1]:.4f}
-                - Clientes a servir: {len(df_sur)}
-                - Volumen total: {df_sur['Kilos'].sum():,.0f} Kg
-                - Distancia desde DLF: {distancia_dlf_sur:.1f} km
-                """)
 
     except Exception as e:
         st.error(f"Error procesando el archivo: {type(e).__name__}: {e}")
