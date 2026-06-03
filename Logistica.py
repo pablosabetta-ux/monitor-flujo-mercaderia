@@ -565,64 +565,64 @@ if archivo_cargado is not None:
                         lat_dest_debug = "N/A"
                         lon_dest_debug = "N/A"
 
-#---------------------------------------DEBUG
-                    # Verificamos si existen en el diccionario para el mapa
-                    existe_origen = orig_u in COORDENADAS
-                    #existe_destino = dest_u in COORDENADAS
-                    existe_destino = (lat_dest_debug != "N/A" and lat_dest_debug != 0)
+                    #---------------------------------------DEBUG
+                        # Verificamos si existen en el diccionario para el mapa
+                        existe_origen = orig_u in COORDENADAS
+                        #existe_destino = dest_u in COORDENADAS
+                        existe_destino = (lat_dest_debug != "N/A" and lat_dest_debug != 0)
 
-                    # 🔍 GUARDAMOS EL ESTADO DE DEBUG (Pasó o por qué falló)
-                    estado_validacion = f"APROBADO ✅ - Origen '{orig_u}' y Destino '{dest_u}' encontrados en COORDENADAS"
-                    if not existe_origen and not existe_destino:
-                        estado_validacion = "❌ ERROR: Ni Origen ni Destino existen en COORDENADAS"
-                    elif not existe_origen:
-                        estado_validacion = f"❌ ERROR: Origen '{orig_u}' no encontrado en COORDENADAS"
-                    elif not existe_destino:
-                        estado_validacion = f"❌ ERROR: Destino '{dest_u}' no encontrado en COORDENADAS"
+                        # 🔍 GUARDAMOS EL ESTADO DE DEBUG (Pasó o por qué falló)
+                        estado_validacion = f"APROBADO ✅ - Origen '{orig_u}' y Destino '{dest_u}' encontrados en COORDENADAS"
+                        if not existe_origen and not existe_destino:
+                            estado_validacion = "❌ ERROR: Ni Origen ni Destino existen en COORDENADAS"
+                        elif not existe_origen:
+                            estado_validacion = f"❌ ERROR: Origen '{orig_u}' no encontrado en COORDENADAS"
+                        elif not existe_destino:
+                            estado_validacion = f"❌ ERROR: Destino '{dest_u}' no encontrado en COORDENADAS"
 
-                    dato_clie = COORDENADAS[dest_u].get('display_name', dest_u) if existe_destino else "N/A"
-                    localidad_clie = COORDENADAS[dest_u].get('localidad', 'N/A') if existe_destino else "N/A"
-                    Lat_clie = COORDENADAS[dest_u].get('latitud', 'N/A') if existe_destino else "N/A"
-                    Long_clie = COORDENADAS[dest_u].get('longitud', 'N/A') if existe_destino else "N/A"
+                        dato_clie = COORDENADAS[dest_u].get('display_name', dest_u) if existe_destino else "N/A"
+                        localidad_clie = COORDENADAS[dest_u].get('localidad', 'N/A') if existe_destino else "N/A"
+                        Lat_clie = COORDENADAS[dest_u].get('latitud', 'N/A') if existe_destino else "N/A"
+                        Long_clie = COORDENADAS[dest_u].get('longitud', 'N/A') if existe_destino else "N/A"
+                        
+                        st.session_state['rastro_coordenadas_debug'].append({
+                            'Fila_Excel': idx,
+                            'Nro_Remito_Cuenta': remito,
+                            'Origen': orig_u,
+                            'Destino': dest_u,
+                            'Kilos': kg_abs,
+                            'Doc': estado_doc,
+                            'Resultado_Validacion': estado_validacion,
+                            'Display_Name_Destino': dato_clie,
+                            'Localidad Clie': localidad_display,
+                            'Latitud_Dest': lat_dest_debug,
+                            'Longitud_Dest': lon_dest_debug  
+                        })
                     
-                    st.session_state['rastro_coordenadas_debug'].append({
-                        'Fila_Excel': idx,
-                        'Nro_Remito_Cuenta': remito,
-                        'Origen': orig_u,
-                        'Destino': dest_u,
-                        'Kilos': kg_abs,
-                        'Doc': estado_doc,
-                        'Resultado_Validacion': estado_validacion,
-                        'Display_Name_Destino': dato_clie,
-                        'Localidad Clie': localidad_display,
-                        'Latitud_Dest': lat_dest_debug,
-                        'Longitud_Dest': lon_dest_debug  
-                    })
-                    
-                    if existe_origen and existe_destino:
-                        orig_display = COORDENADAS[orig_u].get('display_name', orig)
+                        if existe_origen and existe_destino:
+                            orig_display = COORDENADAS[orig_u].get('display_name', orig)
 
-                        st.session_state['orig_dest_mapa'].append({
-                                'Origen': orig_display.upper().strip(), 
-                                'Destino': str(dest).upper().strip(), 
-                                'Cliente': cliente_display if cliente_display else None,
-                                'Kilos': kg_abs,
-                                'TP': tp,
-                                'ESTADO': estado_doc,
-                                'FleteProp': es_fleteprop,
-                                'LAT_ORIG': COORDENADAS[orig_u]['lat'],
-                                'LON_ORIG': COORDENADAS[orig_u]['lon'],
-                                'LAT_DEST': lat_dest_debug,
-                                'LON_DEST': lon_dest_debug,
-                                'Nro_Remito_Cuenta': remito
-                            })
+                            st.session_state['orig_dest_mapa'].append({
+                                    'Origen': orig_display.upper().strip(), 
+                                    'Destino': str(dest).upper().strip(), 
+                                    'Cliente': cliente_display if cliente_display else None,
+                                    'Kilos': kg_abs,
+                                    'TP': tp,
+                                    'ESTADO': estado_doc,
+                                    'FleteProp': es_fleteprop,
+                                    'LAT_ORIG': COORDENADAS[orig_u]['lat'],
+                                    'LON_ORIG': COORDENADAS[orig_u]['lon'],
+                                    'LAT_DEST': lat_dest_debug,
+                                    'LON_DEST': lon_dest_debug,
+                                    'Nro_Remito_Cuenta': remito
+                                })
 
-                    volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
-                    volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
+                        volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
+                        volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
 
-            if len(st.session_state['orig_dest_mapa']) > 0:
-                st.session_state['proceso_1_ejecutado'] = True
-            
+                if len(st.session_state['orig_dest_mapa']) > 0:
+                    st.session_state['proceso_1_ejecutado'] = True
+        
             df_flujo_mapa = pd.DataFrame(orig_dest_mapa)
 
             # --- DISPARO DE COMPONENTES EN PANTALLA ---
