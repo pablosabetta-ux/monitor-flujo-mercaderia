@@ -623,9 +623,7 @@ if archivo_cargado is not None:
                 if len(st.session_state['orig_dest_mapa']) > 0:
                     st.session_state['proceso_1_ejecutado'] = True
         
-            df_flujo_mapa = pd.DataFrame(orig_dest_mapa)
-
-            # --- DISPARO DE COMPONENTES EN PANTALLA ---
+                df_flujo_mapa = pd.DataFrame(orig_dest_mapa)
 
             # --- DETECCIÓN DE INEFICIENCIAS (RULOS POR LOTE) ---
             st.subheader("⚠️ Alertas de Ineficiencias y Rulos Logísticos")
