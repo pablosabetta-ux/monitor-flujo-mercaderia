@@ -1304,27 +1304,6 @@ if archivo_cargado is not None:
                     st.write("### 🗺️ Distribución de Clientes por Zona")
                     st.dataframe(df_cluster_results[['Localidad Clie', 'Kilos', 'Zona Asignada']], use_container_width=True, hide_index=True)
                     
-                    # Tarjetas de Recomendación Estratégica con los Centroides Óptimos
-                    st.write("### 💡 Recomendaciones Estratégicas de Ubicación")
-                    rec_col1, rec_col2 = st.columns(2)
-                    
-                    with rec_col1:
-                        st.info(f"""
-                        **Depósito Regional NORTE (Propuesto)**
-                        - **Ubicación Óptima Centroide:** Lat {centroides[cluster_norte][0]:.4f}, Lon {centroides[cluster_norte][1]:.4f}
-                        - Clientes del rango: {len(df_norte)}
-                        - Volumen total acumulado: {df_norte['Kilos'].sum():,.0f} Kg
-                        - Distancia de reabastecimiento desde Base: {distancia_dlf_norte:.1f} km
-                        """)
-                    
-                    with rec_col2:
-                        st.info(f"""
-                        **Depósito Regional SUR (Propuesto)**
-                        - **Ubicación Óptima Centroide:** Lat {centroides[cluster_sur][0]:.4f}, Lon {centroides[cluster_sur][1]:.4f}
-                        - Clientes del rango: {len(df_sur)}
-                        - Volumen total acumulado: {df_sur['Kilos'].sum():,.0f} Kg
-                        - Distancia de reabastecimiento desde Base: {distancia_dlf_sur:.1f} km
-                        """)
                 else:
                     st.info("💡 Se necesitan al menos 2 localidades de destino geolocalizadas diferentes para calcular la apertura de hubs.")
 
