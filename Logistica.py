@@ -615,7 +615,7 @@ if archivo_cargado is not None:
                                 'LAT_DEST': lat_dest_debug,
                                 'LON_DEST': lon_dest_debug,
                                 'Nro_Remito_Cuenta': remito
-                            })
+                        })
 
                     volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
                     volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
