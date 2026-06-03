@@ -16,6 +16,18 @@ def normalizar_texto(texto):
     texto_limpio = "".join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
     return texto_limpio.upper().strip()
 
+
+# Inicializamos la variable de control en el estado de la sesión si no existe
+if 'proceso_1_ejecutado' not in st.session_state:
+    st.session_state['proceso_1_ejecutado'] = False
+
+if 'orig_dest_mapa' not in st.session_state:
+    st.session_state['orig_dest_mapa'] = []
+
+if 'rastro_coordenadas_debug' not in st.session_state:
+    st.session_state['rastro_coordenadas_debug'] = []
+
+
 # Configuración de la página de Streamlit
 st.set_page_config(layout="wide", page_title="Análisis de Ineficiencias Logísticas")
 st.title("📊 Monitor de Flujos, Ineficiencias y Cuellos de Botella")
@@ -308,7 +320,10 @@ if archivo_cargado is not None:
             transito_por_lote = dict(zip(ingresos_t['Lote_Clean'], ingresos_t['DEPOSITO']))
 
             orig_dest_sankey = []
-                
+            # Limpiamos la memoria en cada corrida para que reaccione a los filtros laterales
+            st.session_state['orig_dest_mapa'] = []
+            st.session_state['rastro_coordenadas_debug'] = []
+
             for idx, row in df_filtrado.iterrows():
                             
                 tp = str(row['TP']).strip()
@@ -566,7 +581,7 @@ if archivo_cargado is not None:
                     Lat_clie = COORDENADAS[dest_u].get('latitud', 'N/A') if existe_destino else "N/A"
                     Long_clie = COORDENADAS[dest_u].get('longitud', 'N/A') if existe_destino else "N/A"
                     
-                    rastro_coordenadas_debug.append({
+                    st.session_state['rastro_coordenadas_debug'].append({
                         'Fila_Excel': idx,
                         'Nro_Remito_Cuenta': remito,
                         'Origen': orig_u,
@@ -598,6 +613,10 @@ if archivo_cargado is not None:
 
                     volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
                     volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
+
+            # Activamos la bandera si el procesamiento arrojó datos válidos
+            if len(st.session_state['orig_dest_mapa']) > 0:
+                st.session_state['proceso_1_ejecutado'] = True
 
             df_flujo_mapa = pd.DataFrame(orig_dest_mapa)
 
