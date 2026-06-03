@@ -620,10 +620,10 @@ if archivo_cargado is not None:
                     volumen_por_localidad[orig_u] = volumen_por_localidad.get(orig_u, 0) + kg_abs
                     volumen_por_localidad[dest_u] = volumen_por_localidad.get(dest_u, 0) + kg_abs
 
-                if len(st.session_state['orig_dest_mapa']) > 0:
-                    st.session_state['proceso_1_ejecutado'] = True
-        
-                df_flujo_mapa = pd.DataFrame(orig_dest_mapa)
+                    if len(st.session_state['orig_dest_mapa']) > 0:
+                        st.session_state['proceso_1_ejecutado'] = True
+            
+                    df_flujo_mapa = pd.DataFrame(orig_dest_mapa)
 
             # --- DETECCIÓN DE INEFICIENCIAS (RULOS POR LOTE) ---
             st.subheader("⚠️ Alertas de Ineficiencias y Rulos Logísticos")
