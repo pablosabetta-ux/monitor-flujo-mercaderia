@@ -16,6 +16,16 @@ def normalizar_texto(texto):
     texto_limpio = "".join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
     return texto_limpio.upper().strip()
 
+def calcular_distancia_km(lat1, lon1, lat2, lon2):
+    """Calcula la distancia geodésica entre dos puntos (Haversine)"""
+    if any(v == "N/A" or v == 0 for v in [lat1, lon1, lat2, lon2]):
+        return 0.0
+    R = 6371.0 # Radio de la Tierra en Kms
+    dlat = np.radians(lat2 - lat1)
+    dlon = np.radians(lon2 - lon1)
+    a = np.sin(dlat/2)**2 + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon/2)**2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1-a))
+    return R * c
 
 # Inicializamos la variable de control en el estado de la sesión si no existe
 if 'proceso_1_ejecutado' not in st.session_state:
@@ -1206,102 +1216,200 @@ if archivo_cargado is not None:
         # PANTALLA 5: UBICACIÓN ÓPTIMA DE DEPÓSITOS REGIONALES
         # ------------------------------------------------------------------
         elif pantalla_activa == "🏭 Nuevos Depósitos":
-            st.subheader("📍 Análisis de Densidad de Entregas para Apertura de Hubs")
-            
+            st.subheader("📍 Análisis de Clustering para Ubicación de Depósitos Regionales")
+            st.write("""
+            Análisis financiero y logístico para determinar la ubicación óptima de dos nuevos centros de distribución regional (Norte y Sur) 
+            que minimicen distancias y costos fijos de última milla. Los fletes prorratean un presupuesto de **USD 300.000** en base a los kilómetros recorridos.
+            """)
+
             # Candado de seguridad: si no se procesó nada antes, avisamos
             if not st.session_state.get('proceso_1_ejecutado', False):
-                st.warning("⚠️ **No hay datos procesados disponibles:** Asegúrate de haber cargado el archivo Excel en la pestaña principal.")
+                st.warning("⚠️ **No hay datos procesados disponibles:** Asegúrate de haber cargado el archivo Excel y ejecutado el procesamiento en la pestaña principal.")
                 st.stop()
 
-            # 🌟 CORRECCIÓN 1: Tomamos los datos del rastro analítico que guardamos en la sesión
-            rastro_debug = st.session_state.get('rastro_coordenadas_debug', [])
-            df_debug = pd.DataFrame(rastro_debug) if rastro_debug else pd.DataFrame()
-            
-            # Filtramos solo los registros que tengan coordenadas de destino válidas y reales
-            if not df_debug.empty and 'Latitud_Dest' in df_debug.columns:
-                df_km = df_debug[
-                    (df_debug['Latitud_Dest'] != "N/A") & 
-                    (df_debug['Latitud_Dest'] != 0) & 
-                    (df_debug['Latitud_Dest'].notna())
-                ].copy()
-                
-                # Necesitamos al menos 2 puntos para que KMeans pueda armar grupos (clusters)
-                if len(df_km) >= 2:
-                    # Preparamos la matriz de coordenadas para el algoritmo
-                    X = df_km[['Latitud_Dest', 'Longitud_Dest']].values
-                    
-                    # Ejecutamos KMeans para agrupar los clientes en 2 zonas óptimas
-                    kmeans = KMeans(n_clusters=2, random_state=42, n_init=10).fit(X)
-                    df_km['Cluster'] = kmeans.labels_
-                    
-                    # 🌟 CORRECCIÓN 2: El centroide de Pergamino (DLF) lo buscamos en COORDENADAS
-                    origen_principal = normalizar_texto("PERGAMINO") # O "DLF" según mapeo
-                    if origen_principal in COORDENADAS:
-                        lat_dlf = COORDENADAS[origen_principal]['lat']
-                        lon_dlf = COORDENADAS[origen_principal]['lon']
-                    else:
-                        # Resguardo por si las moscas si no encuentra Pergamino
-                        lat_dlf, lon_dlf = -33.89, -60.57 
-                    
-                    centroides = kmeans.cluster_centers_
-                    
-                    # Clasificamos cuál cluster es Norte y cuál es Sur en base a la latitud
-                    if centroides[0][0] > centroides[1][0]:
-                        cluster_norte, cluster_sur = 0, 1
-                    else:
-                        cluster_norte, cluster_sur = 1, 0
-                        
-                    df_norte = df_km[df_km['Cluster'] == cluster_norte]
-                    df_sur = df_km[df_km['Cluster'] == cluster_sur]
-                    
-                    # Función Haversine local para calcular la distancia de los hubs a la base (DLF)
-                    def haversine(lat1, lon1, lat2, lon2):
-                        R = 6371.0
-                        rad_lat1, rad_lon1 = np.radians(lat1), np.radians(lon1)
-                        rad_lat2, rad_lon2 = np.radians(lat2), np.radians(lon2)
-                        dlat = rad_lat2 - rad_lat1
-                        dlon = rad_lon2 - rad_lon1
-                        a = np.sin(dlat/2)**2 + np.cos(rad_lat1) * np.cos(rad_lat2) * np.sin(dlon/2)**2
-                        return R * (2 * np.arctan2(np.sqrt(a), np.sqrt(1-a)))
+            # 🌟 CONSUMIMOS DATOS DE LA SESIÓN (CROSS-SCREEN STATE)
+            viajes_base = st.session_state.get('orig_dest_mapa', [])
 
-                    distancia_dlf_norte = haversine(lat_dlf, lon_dlf, centroides[cluster_norte][0], centroides[cluster_norte][1])
-                    distancia_dlf_sur = haversine(lat_dlf, lon_dlf, centroides[cluster_sur][0], centroides[cluster_sur][1])
+            if viajes_base:
+                # 1. ARMADO DE LA MATRIZ PARA CLUSTERING (Unificar volumen por localidad única)
+                # No podemos pasar KMeans directamente sobre la lista de remitos, debemos consolidar
+                total_kg_por_destino = {}
+                coordenadas_por_destino = {}
+
+                for v in viajes_base:
+                    if v['LAT_DEST'] != "N/A" and v['LON_DEST'] != "N/A":
+                        # Usamos el nombre original de la localidad comercial (ej. CLIENTE/ZONA) para unificar
+                        dest_clean = str(v['Destino']).upper().strip()
+                        kg = float(v['Kilos'])
+                        
+                        total_kg_por_destino[dest_clean] = total_kg_por_destino.get(dest_clean, 0) + kg
+                        coordenadas_por_destino[dest_clean] = (v['LAT_DEST'], v['LON_DEST'])
+
+                # Creamos la lista de arrays (lat, lon) para KMeans
+                matriz_coordenadas = [np.array(coords) for coords in coordenadas_por_destino.values()]
+
+                if len(matriz_coordenadas) < 2:
+                    st.error("❌ No hay suficientes localidades con coordenadas válidas para calcular el clustering (KMeans). Se requieren al menos 2 puntos.")
+                else:
+                    X = np.array(matriz_coordenadas)
+
+                    # 2. ALGORITMO K-MEANS CLUSTERING (fijado a 2 para Norte/Sur)
+                    kmeans = KMeans(n_clusters=2, random_state=42, n_init=10).fit(X)
                     
-                    # Preparamos los resultados visuales para el usuario
-                    df_cluster_results = df_km[['Localidad Clie', 'Kilos', 'Cluster']].copy()
-                    df_cluster_results['Zona Asignada'] = df_cluster_results['Cluster'].map(
-                        {cluster_norte: 'Norte 🔵', cluster_sur: 'Sur 🔴'}
+                    # Recuperamos los centroides óptimos
+                    centroides_geom = kmeans.cluster_centers_
+
+                    # Determinamos Norte vs Sur por latitud
+                    if centroides_geom[0][0] > centroides_geom[1][0]:
+                        norte_index, sur_index = 0, 1
+                    else:
+                        norte_index, sur_index = 1, 0
+
+                    # 🌟 3. DIBUJO DEL MAPA DE CLUSTERING ( go.Scattergeo)
+                    fig = go.Figure()
+
+                    # --- CAPA 1: Depósito de Referencia (DLF/RUTA 8) ---
+                    # Puedes buscar el nombre exacto de tu depósito central en el diccionario COORDENADAS
+                    # Por ejemplo, busco "RUTA 8" o "DLF RUTA 8". Si no está, uso Pergamino de resguardo.
+                    origen_referencia = "RUTA 8" # O "DLF" según el nombre en tu Excel
+                    if origen_referencia in COORDENADAS:
+                        base_lat, base_lon = COORDENADAS[origen_referencia]['lat'], COORDENADAS[origen_referencia]['lon']
+                    else:
+                        base_lat, base_lon = -33.89, -60.57 # Resguardo Pergamino
+                        origen_referencia = "PERGAMINO (BASE)"
+
+                    fig.add_trace(go.Scattergeo(
+                        lon=[base_lon], lat=[base_lat],
+                        mode='markers+text',
+                        name='Depósito Central (BASE)',
+                        marker=dict(size=18, color='#ff00ff', symbol='diamond', line=dict(width=2, color='white')),
+                        text=['🏭 ' + origen_referencia],
+                        textposition='top center',
+                        hoverinfo='text',
+                        hovertext=f"Base Principal: {origen_referencia}<br>Km de Demanda Totales: {st.session_state['total_km_flota'] or 0:,.1f} Km"
+                    ))
+
+                    # --- CAPA 2 & 3: Clientes Asignados por Cluster con tamaño Proporcional ---
+                    labels = kmeans.labels_
+                    localidades_consolidadas = list(coordenadas_por_destino.keys())
+
+                    for idx_target in range(2):
+                        # Identificamos el color, nombre y los índices que pertenecen a este cluster
+                        es_norte = (idx_target == norte_index)
+                        color = '#1707f0' if es_norte else '#fa0909' # Azul Norte, Rojo Sur
+                        nombre = "🔵 Clientes Regional Norte" if es_norte else "🔴 Clientes Regional Sur"
+                        
+                        # Sacamos el vector de índices para este cluster
+                        indices_cluster = np.where(labels == idx_target)[0]
+                        
+                        lats, lons, sizes, hover_text = [], [], [], []
+                        kg_volumen = 0
+
+                        for idx_data in indices_cluster:
+                            loc_name = localidades_consolidadas[idx_data]
+                            lat_loc, lon_loc = coordenadas_por_destino[loc_name]
+                            kg_loc = total_kg_por_destino[loc_name]
+                            kg_volumen += kg_loc
+
+                            lats.append(lat_loc)
+                            lons.append(lon_loc)
+                            
+                            # El tamaño del marcador es proporcional al volumen (Kg), limitado para visibilidad
+                            sizes.append(max(8, min(25, int(kg_loc / 25000)+8)))
+                            hover_text.append(f"Localidad: {loc_name}<br>Demanda Total: {kg_loc:,.0f} Kg")
+
+                        if es_norte: kg_volumen_norte = kg_volumen
+                        else: kg_volumen_sur = kg_volumen
+
+                        # Agregamos la capa de marcadores de clientes para este cluster
+                        fig.add_trace(go.Scattergeo(
+                            lon=lons, lat=lats,
+                            mode='markers',
+                            name=nombre,
+                            marker=dict(size=sizes, color=color, opacity=0.7, line=dict(width=1, color='white')),
+                            hoverinfo='text',
+                            text=hover_text
+                        ))
+
+                    # --- CAPA 4: Centroides Propuestos (Estrellas Doradas) ---
+                    fig.add_trace(go.Scattergeo(
+                        lon=[centroides_geom[norte_index][1], centroides_geom[sur_index][1]],
+                        lat=[centroides_geom[norte_index][0], centroides_geom[sur_index][0]],
+                        mode='markers+text',
+                        name='Centroides Óptimos Propuestos',
+                        marker=dict(size=16, color='#f1c40f', symbol='star', line=dict(width=2, color='black')),
+                        text=['📍 NORTE', '📍 SUR'],
+                        textposition='top center',
+                        hoverinfo='text',
+                        hovertext=[
+                            f"Región Norte: Lat {centroides_geom[norte_index][0]:.4f}, Lon {centroides_geom[norte_index][1]:.4f}",
+                            f"Región Sur: Lat {centroides_geom[sur_index][0]:.4f}, Lon {centroides_geom[sur_index][1]:.4f}"
+                        ]
+                    ))
+
+                    # Configuración del mapa centrado en Argentina
+                    fig.update_layout(
+                        geo=dict(
+                            scope='south america', resolution=50,
+                            landcolor='#2c3e50', landwidth=1, # Superficie terrestre oscura
+                            coastlinecolor='#1e7e34', coastlinewidth=3, # Costa verde
+                            showland=True, showcoastlines=True, showlakes=True, showframe=False,
+                            bgcolor='#000000', # Fondo negro
+                            center=dict(lat=-34.0, lon=-62.0),
+                            projection_scale=6.5
+                        ),
+                        margin=dict(l=0, r=0, t=30, b=0),
+                        height=650
                     )
                     
-                    st.success("🎯 El algoritmo de Machine Learning procesó la demanda geográfica de tus clientes de forma exitosa.")
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    # 📊 Métricas Financieras y Geográficas de la propuesta
+                    st.write("---")
+                    st.write("### 🧠 Sugerencia Estratégica & Métricas Financieras")
+
+                    COSTO_TOTAL_PERIODO = 300000.0
+                    costo_por_km_real = st.session_state['costo_por_km_flota']
                     
-                    # Tabla informativa de distribución
-                    st.write("### 🗺️ Distribución de Clientes por Zona")
-                    st.dataframe(df_cluster_results[['Localidad Clie', 'Kilos', 'Zona Asignada']], use_container_width=True, hide_index=True)
+                    distancia_dlf_norte = calcular_distancia_km(base_lat, base_lon, centroides_geom[norte_index][0], centroides_geom[norte_index][1])
+                    distancia_dlf_sur = calcular_distancia_km(base_lat, base_lon, centroides_geom[sur_index][0], centroides_geom[sur_index][1])
                     
-                    # Tarjetas de Recomendación Estratégica con los Centroides Óptimos
-                    st.write("### 💡 Recomendaciones Estratégicas de Ubicación")
-                    rec_col1, rec_col2 = st.columns(2)
+                    col1, col2 = st.columns(2)
                     
-                    with rec_col1:
+                    with col1:
                         st.info(f"""
                         **Depósito Regional NORTE (Propuesto)**
-                        - **Ubicación Óptima Centroide:** Lat {centroides[cluster_norte][0]:.4f}, Lon {centroides[cluster_norte][1]:.4f}
-                        - Clientes del rango: {len(df_norte)}
-                        - Volumen total acumulado: {df_norte['Kilos'].sum():,.0f} Kg
-                        - Distancia de reabastecimiento desde Base: {distancia_dlf_norte:.1f} km
+                        - Ubicación Óptima: Lat {centroides_geom[norte_index][0]:.4f}, Lon {centroides_geom[norte_index][1]:.4f}
+                        - Volumen Total a Servir: {kg_volumen_norte:,.0f} Kg
+                        - Distancia desde DLF: {distancia_dlf_norte:.1f} km
+                        - **Costo de Reabastecimiento Asignado:** USD {distancia_dlf_norte * costo_por_km_real:,.2f}
                         """)
                     
-                    with rec_col2:
+                    with col2:
                         st.info(f"""
                         **Depósito Regional SUR (Propuesto)**
-                        - **Ubicación Óptima Centroide:** Lat {centroides[cluster_sur][0]:.4f}, Lon {centroides[cluster_sur][1]:.4f}
-                        - Clientes del rango: {len(df_sur)}
-                        - Volumen total acumulado: {df_sur['Kilos'].sum():,.0f} Kg
-                        - Distancia de reabastecimiento desde Base: {distancia_dlf_sur:.1f} km
+                        - Ubicación Óptima: Lat {centroides_geom[sur_index][0]:.4f}, Lon {centroides_geom[sur_index][1]:.4f}
+                        - Volumen Total a Servir: {kg_volumen_sur:,.0f} Kg
+                        - Distancia desde DLF: {distancia_dlf_sur:.1f} km
+                        - **Costo de Reabastecimiento Asignado:** USD {distancia_dlf_sur * costo_por_km_real:,.2f}
                         """)
-                else:
-                    st.info("💡 Se necesitan al menos 2 localidades de destino geolocalizadas diferentes para calcular la apertura de hubs.")
+
+                    st.markdown("---")
+                    with st.expander("📚 Ver Tabla Detallada Consolidada por Cliente y Zona Asignada"):
+                        df_cluster_results = pd.DataFrame({
+                            'Cliente (ZONA COMERCIAL)': localidades_consolidadas,
+                            'Demanda Total': [total_kg_por_destino[c] for c in localidades_consolidadas],
+                            'Zona': ['NORTE' if label == norte_index else 'SUR' for label in labels],
+                            'Latitud': [coords[0] for coords in coordenadas_por_destino.values()],
+                            'Longitud': [coords[1] for coords in coordenadas_por_destino.values()],
+                        })
+                        st.dataframe(
+                            df_cluster_results.sort_values(by='Zona', ascending=True), 
+                            use_container_width=True, hide_index=True,
+                            column_config={
+                                'Demanda Total': st.column_config.NumberColumn('Demanda (Kg)', format='%d')
+                            }
+                        )
 
     except Exception as e:
         st.error(f"Error procesando el archivo: {type(e).__name__}: {e}")
