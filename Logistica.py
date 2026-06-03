@@ -1328,6 +1328,204 @@ if archivo_cargado is not None:
                 else:
                     st.info("💡 Se necesitan al menos 2 localidades de destino geolocalizadas diferentes para calcular la apertura de hubs.")
 
+            #-----------------------------------------------------------------
+            #-----------------------------------------------------------------
+            #-----------------------------------------------------------------
+            
+            # 🌟 CONSUMIMOS DATOS DIRECTAMENTE DEL RASTRO DE LA SESIÓN
+            rastro_base = st.session_state.get('rastro_coordenadas_debug', [])
+
+            if rastro_base:
+                # 1. ARMADO DE LA MATRIZ PARA CLUSTERING (Consolidar volumen por localidad real)
+                total_kg_por_destino = {}
+                coordenadas_por_destino = {}
+
+                for v in rastro_base:
+                    lat_d = v.get('Latitud_Dest')
+                    lon_d = v.get('Longitud_Dest')
+                    
+                    if lat_d != "N/A" and lat_d != 0 and pd.notna(lat_d):
+                        dest_clean = str(v.get('Localidad Clie', 'S/D')).upper().strip()
+                        kg = float(v.get('Kilos', 0))
+                        
+                        total_kg_por_destino[dest_clean] = total_kg_por_destino.get(dest_clean, 0) + kg
+                        coordenadas_por_destino[dest_clean] = (float(lat_d), float(lon_d))
+
+                # Creamos la lista de vectores para el algoritmo
+                matriz_coordenadas = [np.array(coords) for coords in coordenadas_por_destino.values()]
+
+                if len(matriz_coordenadas) < 2:
+                    st.error("❌ No hay suficientes localidades con coordenadas válidas para calcular el clustering (KMeans). Se requieren al menos 2 puntos.")
+                else:
+                    X = np.array(matriz_coordenadas)
+
+                    # 2. ALGORITMO K-MEANS CLUSTERING (Fijado a 2 Clusters)
+                    kmeans = KMeans(n_clusters=2, random_state=42, n_init=10).fit(X)
+                    centroides_geom = kmeans.cluster_centers_
+
+                    # Determinamos Norte vs Sur por latitud (Menos negativo es más al Norte)
+                    if centroides_geom[0][0] > centroides_geom[1][0]:
+                        norte_index, sur_index = 0, 1
+                    else:
+                        norte_index, sur_index = 1, 0
+
+                    # 🌟 3. RENDERING DEL MAPA EN MODO OSCURO (Plotly)
+                    fig = go.Figure()
+
+                    # --- CAPA 1: Depósito de Referencia Base (Pergamino) ---
+                    # Buscamos en COORDENADAS_LIMPIAS si existe, sino usamos resguardo
+                    base_lat, base_lon = -33.89, -60.57 # Coordenadas de Pergamino
+                    nombre_base = "PERGAMINO (BASE CENTRAL)"
+                    
+                    if 'PERGAMINO' in COORDENADAS:
+                        base_lat = COORDENADAS['PERGAMINO']['lat']
+                        base_lon = COORDENADAS['PERGAMINO']['lon']
+                        nombre_base = COORDENADAS['PERGAMINO'].get('display_name', nombre_base)
+
+                    fig.add_trace(go.Scattergeo(
+                        lon=[base_lon], lat=[base_lat],
+                        mode='markers+text',
+                        name='Base Central (Origen)',
+                        marker=dict(size=18, color='#ff00ff', symbol='diamond', line=dict(width=2, color='white')),
+                        text=['🏭 ' + str(nombre_base).upper()],
+                        textposition='top center',
+                        hoverinfo='text',
+                        hovertext=f"Base de Operaciones: {nombre_base}"
+                    ))
+
+                    # --- CAPA 2 & 3: Marcadores de Clientes Asignados por Cluster ---
+                    labels = kmeans.labels_
+                    localidades_consolidadas = list(coordenadas_por_destino.keys())
+
+                    kg_volumen_norte = 0
+                    kg_volumen_sur = 0
+                    cant_norte = 0
+                    cant_sur = 0
+
+                    for idx_target in range(2):
+                        es_norte = (idx_target == norte_index)
+                        color = '#1707f0' if es_norte else '#fa0909' # Azul para Norte, Rojo para Sur
+                        nombre_leyenda = "🔵 Región Comercial Norte" if es_norte else "🔴 Región Comercial Sur"
+                        
+                        indices_cluster = np.where(labels == idx_target)[0]
+                        
+                        lats, lons, sizes, hover_text = [], [], [], []
+
+                        for idx_data in indices_cluster:
+                            loc_name = localidades_consolidadas[idx_data]
+                            lat_loc, lon_loc = coordenadas_por_destino[loc_name]
+                            kg_loc = total_kg_por_destino[loc_name]
+
+                            if es_norte:
+                                kg_volumen_norte += kg_loc
+                                cant_norte += 1
+                            else:
+                                kg_volumen_sur += kg_loc
+                                cant_sur += 1
+
+                            lats.append(lat_loc)
+                            lons.append(lon_loc)
+                            # Escala visual del tamaño del marcador según el tonelaje
+                            sizes.append(max(8, min(26, int(kg_loc / 40000) + 9)))
+                            hover_text.append(f"📍 {loc_name}<br>Volumen Demandado: {kg_loc:,.0f} Kg")
+
+                        fig.add_trace(go.Scattergeo(
+                            lon=lons, lat=lats,
+                            mode='markers',
+                            name=nombre_leyenda,
+                            marker=dict(size=sizes, color=color, opacity=0.75, line=dict(width=1, color='white')),
+                            hoverinfo='text',
+                            text=hover_text
+                        ))
+
+                    # --- CAPA 4: Centroides Óptimos Encontrados (Estrellas Doradas) ---
+                    fig.add_trace(go.Scattergeo(
+                        lon=[centroides_geom[norte_index][1], centroides_geom[sur_index][1]],
+                        lat=[centroides_geom[norte_index][0], centroides_geom[sur_index][0]],
+                        mode='markers+text',
+                        name='Centroides Sugeridos (Hubs)',
+                        marker=dict(size=16, color='#f1c40f', symbol='star', line=dict(width=2, color='black')),
+                        text=['⭐ HUB SUGERIDO NORTE', '⭐ HUB SUGERIDO SUR'],
+                        textposition='top center',
+                        hoverinfo='text',
+                        hovertext=[
+                            f"Hub Norte Propuesto:<br>Lat {centroides_geom[norte_index][0]:.4f}<br>Lon {centroides_geom[norte_index][1]:.4f}",
+                            f"Hub Sur Propuesto:<br>Lat {centroides_geom[sur_index][0]:.4f}<br>Lon {centroides_geom[sur_index][1]:.4f}"
+                        ]
+                    ))
+
+                    # Ajustes de diseño de Plotly con fondo oscuro técnico
+                    fig.update_layout(
+                        geo=dict(
+                            scope='south america',
+                            showland=True, landcolor='#1a1a1a', # Gris oscuro
+                            showcountries=True, countrycolor='#444444',
+                            showlakes=True, lakecolor='#111111',
+                            bgcolor='#0d0d0d', # Fondo del canvas negro técnico
+                            center=dict(lat=-34.0, lon=-62.0),
+                            projection_scale=6.5
+                        ),
+                        margin=dict(l=0, r=0, t=20, b=0),
+                        legend=dict(x=0.02, y=0.02, bgcolor='rgba(0,0,0,0.6)', font=dict(color='white')),
+                        height=680
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    # 4. PRORRATEO FINANCIERO ESTIMADO
+                    st.write("---")
+                    st.write("### 🧠 Sugerencia Estratégica & Métricas del Modelo")
+
+                    distancia_dlf_norte = calcular_distancia_km_local(base_lat, base_lon, centroides_geom[norte_index][0], centroides_geom[norte_index][1])
+                    distancia_dlf_sur = calcular_distancia_km_local(base_lat, base_lon, centroides_geom[sur_index][0], centroides_geom[sur_index][1])
+                    
+                    # Simulación de costos proporcionales sobre el presupuesto de 300k
+                    dist_total = (distancia_dlf_norte + distancia_dlf_sur) if (distancia_dlf_norte + distancia_dlf_sur) > 0 else 1
+                    costo_estimado_norte = (distancia_dlf_norte / dist_total) * 300000.0
+                    costo_estimado_sur = (distancia_dlf_sur / dist_total) * 300000.0
+
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.info(f"""
+                        **Depósito Regional NORTE (Sugerido)**
+                        - **Coordenadas Centroide:** {centroides_geom[norte_index][0]:.4f}, {centroides_geom[norte_index][1]:.4f}
+                        - **Localidades asignadas:** {cant_norte} puntos comerciales
+                        - **Volumen Absorbido:** {kg_volumen_norte:,.0f} Kg
+                        - **Distancia de tracción desde Base:** {distancia_dlf_norte:.1f} Km
+                        - **Presupuesto Logístico Prorrateado:** USD {costo_estimado_norte:,.2f}
+                        """)
+                    
+                    with col2:
+                        st.info(f"""
+                        **Depósito Regional SUR (Sugerido)**
+                        - **Coordenadas Centroide:** {centroides_geom[sur_index][0]:.4f}, {centroides_geom[sur_index][1]:.4f}
+                        - **Localidades asignadas:** {cant_sur} puntos comerciales
+                        - **Volumen Absorbido:** {kg_volumen_sur:,.0f} Kg
+                        - **Distancia de tracción desde Base:** {distancia_dlf_sur:.1f} Km
+                        - **Presupuesto Logístico Prorrateado:** USD {costo_estimado_sur:,.2f}
+                        """)
+
+                    # Tabla detallada oculta en un Expander para no sobrecargar
+                    st.markdown("---")
+                    with st.expander("📚 Ver Tabla Detallada Consolidada por Cliente y Zona Asignada"):
+                        zonas_lista = ['NORTE' if label == norte_index else 'SUR' for label in labels]
+                        df_cluster_results = pd.DataFrame({
+                            'Cliente (ZONA COMERCIAL)': localidades_consolidadas,
+                            'Demanda Total (Kg)': [total_kg_por_destino[c] for c in localidades_consolidadas],
+                            'Zona Asignada': zonas_lista,
+                            'Latitud': [coords[0] for coords in coordenadas_por_destino.values()],
+                            'Longitud': [coords[1] for coords in coordenadas_por_destino.values()]
+                        })
+                        st.dataframe(
+                            df_cluster_results.sort_values(by='Zona Asignada', ascending=True), 
+                            use_container_width=True, 
+                            hide_index=True
+                        )
+            else:
+                st.info("💡 No hay registros georreferenciados en la memoria de la sesión para calcular los clusters.")
+
+
     except Exception as e:
         st.error(f"Error procesando el archivo: {type(e).__name__}: {e}")
                 
