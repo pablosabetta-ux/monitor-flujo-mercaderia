@@ -320,6 +320,28 @@ if archivo_cargado is not None:
             st.session_state['orig_dest_mapa'] = []
             st.session_state['rastro_coordenadas_debug'] = []
 
+            viajes_lista = st.session_state.get('orig_dest_mapa', [])
+            columnas_obligatorias = ['Origen', 'Destino', 'Kilos', 'TP', 'ESTADO', 'LAT_ORIG', 'LON_ORIG', 'LAT_DEST', 'LON_DEST']
+        
+            # Forzamos la estructura si la lista viene vacía para que no falle por falta de columnas
+            if viajes_lista:
+                df_mapa = pd.DataFrame(viajes_lista)
+            else:
+                df_mapa = pd.DataFrame(columns=columnas_obligatorias)
+                
+            # 🛑 FILTRO DE SEGURIDAD: Si está vacío, frena la pantalla prolijamente sin crashear
+            if df_mapa.empty:
+                st.warning("⚠️ No hay rutas mapeadas para mostrar con los filtros seleccionados.")
+                st.caption("💡 *Sugerencia:* Esto sucede si los artículos elegidos no registran coordenadas en la pestaña 'CLIENTES' o si sus cantidades netas suman cero.")
+                st.stop() # <-- Evita que el código baje al groupby y rompa
+                
+            # Si tiene datos, realiza la consolidación normal de rutas
+            columnas_agrupamiento = ['Origen', 'Destino', 'LAT_ORIG', 'LON_ORIG', 'LAT_DEST', 'LON_DEST', 'ESTADO']
+            df_rutas_consolidadas = df_mapa.groupby(columnas_agrupamiento).agg({
+                'Kilos': 'sum'
+            }).reset_index()
+
+
             for idx, row in df_filtrado.iterrows():
                             
                 tp = str(row['TP']).strip()
