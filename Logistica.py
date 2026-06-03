@@ -779,219 +779,215 @@ if archivo_cargado is not None:
                     }
             )
 
-                st.markdown("---")
+            st.markdown("---")
 
-                # ----- MAPA GEOGRÁFICO DE DEPÓSITOS (OPCIONAL) -----
-                st.subheader("🗺️ Representación Geográfica de Entregas")
-                
+            # ----- MAPA GEOGRÁFICO DE DEPÓSITOS -----
+            st.subheader("🗺️ Representación Geográfica de Entregas")
+            
+            fig = go.Figure()
+            
+            # Creamos una columna booleana para identificar los despachos de terceros de manera directa
+            if 'ESTADO' in df_flujo_mapa.columns:
+                df_flujo_mapa['Es_Tercero'] = df_flujo_mapa['ESTADO'] == "R16a"
+            else:
+                df_flujo_mapa['Es_Tercero'] = False
+            
+            # Aplicamos el filtro de la barra lateral directamente sobre la base de datos del mapa
+            df_mapa_filtrado = df_flujo_mapa.copy()
+
+            if tipo_despacho == "Despachos Directos":
+                df_mapa_filtrado = df_mapa_filtrado[~((df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero']))]
+            elif tipo_despacho == "Despachos de Terceros":
+                # Al aislar terceros, ocultamos tránsitos internos para limpiar por completo la red R16a
+                df_mapa_filtrado = df_mapa_filtrado[(df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero'])]
+            
                 # ==================================================================
-                # NUEVA LÓGICA: 
+                # 🟢 PANEL DE DEBUG DINÁMICO (Ubicación Correcta Post-Filtro)
                 # ==================================================================
-                
-                fig = go.Figure()
-                
-                # Creamos una columna booleana para identificar los despachos de terceros de manera directa
-                if 'ESTADO' in df_flujo_mapa.columns:
-                    df_flujo_mapa['Es_Tercero'] = df_flujo_mapa['ESTADO'] == "R16a"
+                with st.expander("🔍 PANEL DE CONTROL & DEBUG (Auditoría en Tiempo Real)"):
+                    st.write(f"### 🎯 Estado actual del filtro lateral: **{tipo_despacho}**")
+                    
+                    st.metric(label="Filas que pasan al mapa de Plotly", value=len(df_mapa_filtrado))
+                    
+                    st.success(f"✅ Mostrando los primeros registros listos para graficar:")
+                    # Conteo para auditar qué tipos de documentos están sobreviviendo
+                    st.write("**Resumen por tipo de comprobante (ESTADO):**")
+                    st.dataframe(df_mapa_filtrado['ESTADO'].value_counts())
+                    
+                    if rastro_auditoria:
+                        st.write("### 🔬 Trazabilidad Vuelta por Vuelta (`for` loop)")
+                        st.write("Esta tabla muestra qué valor tenía cada variable interna en cada paso del procesamiento:")
+                        df_rastro = pd.DataFrame(rastro_auditoria)
+                        st.dataframe(df_rastro, use_container_width=True)
+
+                    if 'rastro_coordenadas_debug' in locals() and rastro_coordenadas_debug:
+                        st.write("### 🌍 Auditoría Geográfica de Rutas (Filtro Plotly)")
+                        st.write("Esta tabla te muestra qué registros de la base cruzaron con éxito el diccionario de coordenadas y cuáles fueron rechazados:")
+                        
+                        df_debug_geo = pd.DataFrame(rastro_coordenadas_debug)
+                        
+                        # Buscador rápido dentro del debug para filtrar errores
+                        filtro_error = st.checkbox("Mostrar solo filas con errores de coordenadas", value=False)
+                        if filtro_error:
+                            df_debug_geo = df_debug_geo[df_debug_geo['Resultado_Validacion'].str.contains("❌")]
+                        
+                        st.dataframe(df_debug_geo, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No hay datos de auditoría geográfica procesados.")
+
+                    st.markdown("---")
+                # ==================================================================
+
+                # 2. Simulamos el impacto del filtro seleccionado en la barra lateral
+                st.write("---")
+                st.write(f"### 🎯 Impacto del Filtro Lateral: **{tipo_despacho}**")
+
+                # Consolidamos y agrupamos los flujos finales manteniendo la bandera de terceros
+                if df_mapa_filtrado.empty:
+                    st.info("ℹ️ No hay rutas para mostrar con los filtros seleccionados.")
+                    df_flujo_mapa = pd.DataFrame()
                 else:
-                    df_flujo_mapa['Es_Tercero'] = False
+                    df_flujo_mapa = df_mapa_filtrado.groupby(['Origen', 'Destino', 'TP', 'Es_Tercero'], as_index=False)['Kilos'].sum()
                 
-                # Aplicamos el filtro de la barra lateral directamente sobre la base de datos del mapa
-                df_mapa_filtrado = df_flujo_mapa.copy()
+                # Solo procesar si hay datos
+                if not df_flujo_mapa.empty:
+                    df_tipo = df_flujo_mapa[df_flujo_mapa['TP'] == tipo_mov]
+                    
+                    lats_lineas = []
+                    lons_lineas = []
+                    textos_hover = []
+                    
+                    for idx, row in df_tipo.iterrows():
+                        orig = str(row['Origen'].upper().strip())
+                        dest = str(row['Destino'].upper().strip())
+                        kilos = row['Kilos']
+                        es_tercero_linea = row['Es_Tercero']
+                    
+                        if orig in COORDENADAS and dest in COORDENADAS:
+                            c_orig = COORDENADAS[orig]
+                            c_dest = COORDENADAS[dest]
+                            
+                            # --- CÁLCULO DE ARCOS CURVOS PARA NO SUPERPONER LÍNEAS ---
+                            # Creamos 15 puntos intermedios entre el origen y el destino
+                            puntos = 15
+                            lats = np.linspace(c_orig['lat'], c_dest['lat'], puntos)
+                            lons = np.linspace(c_orig['lon'], c_dest['lon'], puntos)
+                            
+                            # Agregamos una distorsión matemática en forma de parábola (arco)
+                            distorsion = np.sin(np.linspace(0, np.pi, puntos)) * 0.15  # Ajustar el 0.15 para más/menos curva
+                            
+                            # Desviamos las coordenadas sutilmente para curvar la línea
+                            lats_curvas = lats + distorsion * (c_dest['lon'] - c_orig['lon']) * 0.2
+                            lons_curvas = lons - distorsion * (c_dest['lat'] - c_orig['lat']) * 0.2
+                            
+                            # Estructuramos los vectores para Plotly separando cada tramo con None
+                            for la, lo in zip(lats_curvas, lons_curvas):
+                                lats_lineas.append(la)
+                                lons_lineas.append(lo)
+                            lats_lineas.append(None)
+                            lons_lineas.append(None)
+                            
+                            # Texto informativo para cuando pases el mouse por la ruta
+                            tipo_mov=df_mapa_filtrado['TP'].iloc[0] if 'TP' in df_mapa_filtrado.columns else "N/A"
+                            tag_txt = " (Tercero)" if es_tercero_linea else " (Directo)"
+                            cliente_line = f"<br>Cliente: {row.get('Cliente', 'N/A')}" if row.get('Cliente') else ''
+                            info_linea = f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}{tag_txt}{cliente_line}"
+                            textos_hover.append(info_linea)
 
-                if tipo_despacho == "Despachos Directos":
-                    df_mapa_filtrado = df_mapa_filtrado[~((df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero']))]
-                elif tipo_despacho == "Despachos de Terceros":
-                    # Al aislar terceros, ocultamos tránsitos internos para limpiar por completo la red R16a
-                    df_mapa_filtrado = df_mapa_filtrado[(df_mapa_filtrado['TP'] == 'CMV') & (df_mapa_filtrado['Es_Tercero'])]
-                
-                    # ==================================================================
-                    # 🟢 PANEL DE DEBUG DINÁMICO (Ubicación Correcta Post-Filtro)
-                    # ==================================================================
-                    with st.expander("🔍 PANEL DE CONTROL & DEBUG (Auditoría en Tiempo Real)"):
-                        st.write(f"### 🎯 Estado actual del filtro lateral: **{tipo_despacho}**")
-                        
-                        st.metric(label="Filas que pasan al mapa de Plotly", value=len(df_mapa_filtrado))
-                        
-                        st.success(f"✅ Mostrando los primeros registros listos para graficar:")
-                        # Conteo para auditar qué tipos de documentos están sobreviviendo
-                        st.write("**Resumen por tipo de comprobante (ESTADO):**")
-                        st.dataframe(df_mapa_filtrado['ESTADO'].value_counts())
-                        
-                        if rastro_auditoria:
-                            st.write("### 🔬 Trazabilidad Vuelta por Vuelta (`for` loop)")
-                            st.write("Esta tabla muestra qué valor tenía cada variable interna en cada paso del procesamiento:")
-                            df_rastro = pd.DataFrame(rastro_auditoria)
-                            st.dataframe(df_rastro, use_container_width=True)
 
-                        if 'rastro_coordenadas_debug' in locals() and rastro_coordenadas_debug:
-                            st.write("### 🌍 Auditoría Geográfica de Rutas (Filtro Plotly)")
-                            st.write("Esta tabla te muestra qué registros de la base cruzaron con éxito el diccionario de coordenadas y cuáles fueron rechazados:")
-                            
-                            df_debug_geo = pd.DataFrame(rastro_coordenadas_debug)
-                            
-                            # Buscador rápido dentro del debug para filtrar errores
-                            filtro_error = st.checkbox("Mostrar solo filas con errores de coordenadas", value=False)
-                            if filtro_error:
-                                df_debug_geo = df_debug_geo[df_debug_geo['Resultado_Validacion'].str.contains("❌")]
-                            
-                            st.dataframe(df_debug_geo, use_container_width=True, hide_index=True)
+                    # Definición de colores estratégicos por tipo de flujo
+                    color_linea = "#1707f0" if df_mapa_filtrado['TP'] == "TRANSITO" else "#a4e905"
+                    nombre_traza = f"Flujos {tipo_mov}"
+
+                    if df_mapa_filtrado['TP'] == "CMV":
+                        if tipo_despacho == "Despachos de Terceros":
+                            color_linea = "#ece905"  # Púrpura para Terceros
+                            nombre_traza = "CMV - Terceros"
+                        elif tipo_despacho == "Despachos Directos":
+                            color_linea = "#2df705"  # Naranja para Directos
+                            nombre_traza = "CMV - Directos"
                         else:
-                            st.info("No hay datos de auditoría geográfica procesados.")
-
-                        st.markdown("---")
-                    # ==================================================================
-
-                    # 2. Simulamos el impacto del filtro seleccionado en la barra lateral
-                    st.write("---")
-                    st.write(f"### 🎯 Impacto del Filtro Lateral: **{tipo_despacho}**")
-
-                    # Consolidamos y agrupamos los flujos finales manteniendo la bandera de terceros
-                    if df_mapa_filtrado.empty:
-                        st.info("ℹ️ No hay rutas para mostrar con los filtros seleccionados.")
-                        df_flujo_mapa = pd.DataFrame()
-                    else:
-                        df_flujo_mapa = df_mapa_filtrado.groupby(['Origen', 'Destino', 'TP', 'Es_Tercero'], as_index=False)['Kilos'].sum()
+                            color_linea = "#fa0909"  # Naranja por defecto si muestra todos
+                            nombre_traza = "CMV (Todos)"
                     
-                    # Solo procesar si hay datos
-                    if not df_flujo_mapa.empty:
-                        df_tipo = df_flujo_mapa[df_flujo_mapa['TP'] == tipo_mov]
+                    # Agregamos la capa de vectores al mapa
+                    fig.add_trace(go.Scattergeo(
+                        lon = lons_lineas, lat = lats_lineas,
+                        mode = 'lines',
+                        name=nombre_traza,
+                        line = dict(width = 2, color = color_linea),
+                        opacity = 0.6,
+                        hoverinfo = 'text',
+                        text = textos_hover
+                    ))
+
+                # 2. Burbujas Dinámicas: Solo nodos ACTIVOS en el dataframe filtrado
+                # --- AGREGAR NODOS FIJOS COMO BURBUJAS DE VOLUMEN ---
+                # Dibujamos los puntos de las localidades para identificar los centros de masa
+                nodos_activos = set(pd.concat([df_flujo_mapa['Origen'], df_flujo_mapa['Destino']]).unique())
+                lats_nodos, lons_nodos, nombres_nodos, tamaños_nodos = [], [], [], []
+                
+                for nodo in nodos_activos:
+                    nodo_upper = str(nodo).upper()
+                    if nodo_upper in COORDENADAS:
+                        datos = COORDENADAS[nodo_upper]
+                        lats_nodos.append(datos['lat'])
+                        lons_nodos.append(datos['lon'])
+                        nombres_nodos.append(datos.get('display_name', nodo))
                         
-                        lats_lineas = []
-                        lons_lineas = []
-                        textos_hover = []
-                        
-                        for idx, row in df_tipo.iterrows():
-                            orig = str(row['Origen'].upper().strip())
-                            dest = str(row['Destino'].upper().strip())
-                            kilos = row['Kilos']
-                            es_tercero_linea = row['Es_Tercero']
-                      
-                            if orig in COORDENADAS and dest in COORDENADAS:
-                                c_orig = COORDENADAS[orig]
-                                c_dest = COORDENADAS[dest]
-                                
-                                # --- CÁLCULO DE ARCOS CURVOS PARA NO SUPERPONER LÍNEAS ---
-                                # Creamos 15 puntos intermedios entre el origen y el destino
-                                puntos = 15
-                                lats = np.linspace(c_orig['lat'], c_dest['lat'], puntos)
-                                lons = np.linspace(c_orig['lon'], c_dest['lon'], puntos)
-                                
-                                # Agregamos una distorsión matemática en forma de parábola (arco)
-                                distorsion = np.sin(np.linspace(0, np.pi, puntos)) * 0.15  # Ajustar el 0.15 para más/menos curva
-                                
-                                # Desviamos las coordenadas sutilmente para curvar la línea
-                                lats_curvas = lats + distorsion * (c_dest['lon'] - c_orig['lon']) * 0.2
-                                lons_curvas = lons - distorsion * (c_dest['lat'] - c_orig['lat']) * 0.2
-                                
-                                # Estructuramos los vectores para Plotly separando cada tramo con None
-                                for la, lo in zip(lats_curvas, lons_curvas):
-                                    lats_lineas.append(la)
-                                    lons_lineas.append(lo)
-                                lats_lineas.append(None)
-                                lons_lineas.append(None)
-                                
-                                # Texto informativo para cuando pases el mouse por la ruta
-                                tipo_mov=df_mapa_filtrado['TP'].iloc[0] if 'TP' in df_mapa_filtrado.columns else "N/A"
-                                tag_txt = " (Tercero)" if es_tercero_linea else " (Directo)"
-                                cliente_line = f"<br>Cliente: {row.get('Cliente', 'N/A')}" if row.get('Cliente') else ''
-                                info_linea = f"Ruta: {orig} ➡️ {dest}<br>Volumen: {kilos:,.0f} Kg<br>Tipo: {tipo_mov}{tag_txt}{cliente_line}"
-                                textos_hover.append(info_linea)
+                        # El tamaño responde de forma real a los kilos calculados (sin duplicar)
+                        kg_real = volumen_por_localidad.get(nodo_upper, 0)
+                        tamaño_dinamico = max(8, min(25, int(kg_real / 30000)+8)) if kg_real > 0 else 8
+                        tamaños_nodos.append(tamaño_dinamico)
 
-
-                        # Definición de colores estratégicos por tipo de flujo
-                        color_linea = "#1707f0" if df_mapa_filtrado['TP'] == "TRANSITO" else "#a4e905"
-                        nombre_traza = f"Flujos {tipo_mov}"
-
-                        if df_mapa_filtrado['TP'] == "CMV":
-                            if tipo_despacho == "Despachos de Terceros":
-                                color_linea = "#ece905"  # Púrpura para Terceros
-                                nombre_traza = "CMV - Terceros"
-                            elif tipo_despacho == "Despachos Directos":
-                                color_linea = "#2df705"  # Naranja para Directos
-                                nombre_traza = "CMV - Directos"
-                            else:
-                                color_linea = "#fa0909"  # Naranja por defecto si muestra todos
-                                nombre_traza = "CMV (Todos)"
-                        
-                        # Agregamos la capa de vectores al mapa
-                        fig.add_trace(go.Scattergeo(
-                            lon = lons_lineas, lat = lats_lineas,
-                            mode = 'lines',
-                            name=nombre_traza,
-                            line = dict(width = 2, color = color_linea),
-                            opacity = 0.6,
-                            hoverinfo = 'text',
-                            text = textos_hover
-                        ))
-
-                    # 2. Burbujas Dinámicas: Solo nodos ACTIVOS en el dataframe filtrado
-                    # --- AGREGAR NODOS FIJOS COMO BURBUJAS DE VOLUMEN ---
-                    # Dibujamos los puntos de las localidades para identificar los centros de masa
-                    nodos_activos = set(pd.concat([df_flujo_mapa['Origen'], df_flujo_mapa['Destino']]).unique())
-                    lats_nodos, lons_nodos, nombres_nodos, tamaños_nodos = [], [], [], []
+                if lats_nodos:
+                    fig.add_trace(go.Scattergeo(
+                        lon=lons_nodos, lat=lats_nodos,
+                        mode='markers',
+                        name="Puntos Operativos Activos",
+                        marker=dict(size=tamaños_nodos, color='#2ecc71', line=dict(width=1.5, color='black')),
+                        text=nombres_nodos,
+                        hoverinfo='text'
+                    ))
                     
-                    for nodo in nodos_activos:
-                        nodo_upper = str(nodo).upper()
-                        if nodo_upper in COORDENADAS:
-                            datos = COORDENADAS[nodo_upper]
-                            lats_nodos.append(datos['lat'])
-                            lons_nodos.append(datos['lon'])
-                            nombres_nodos.append(datos.get('display_name', nodo))
-                            
-                            # El tamaño responde de forma real a los kilos calculados (sin duplicar)
-                            kg_real = volumen_por_localidad.get(nodo_upper, 0)
-                            tamaño_dinamico = max(8, min(25, int(kg_real / 30000)+8)) if kg_real > 0 else 8
-                            tamaños_nodos.append(tamaño_dinamico)
+                fig.update_layout(
+                    geo = dict(
+                        scope = 'south america',
+                        resolution = 50,
+                        showframe = False,
+                        showcoastlines = True,
+                        coastlinecolor = '#1e7e34',  # Costa verde oscura
+                        showland = True,
+                        landcolor = '#000000',      # Superficie terrestre negra
+                        showlakes = True,
+                        showsubunits = True if not geojson_provincias else False, # Solo mostramos límites si no tenemos el GeoJSON para dibujarlos
+                        subunitcolor = '#1e7e34', # Color de contorno provincial nativo para el Plan B
+                        subunitwidth = 3,         # Grosor de la línea del límite interprovincial
+                        bgcolor = '#000000',         # Fondo general del recuadro negro
+                        center = dict(lat=-34.5, lon=-60.5), # Centrado automático en la zona núcleo argentina
+                        projection_scale = 6
+                    ),
+                    margin = dict(l=0, r=0, t=30, b=0),
+                    height = 600
+                )
 
-                    if lats_nodos:
-                        fig.add_trace(go.Scattergeo(
-                            lon=lons_nodos, lat=lats_nodos,
-                            mode='markers',
-                            name="Puntos Operativos Activos",
-                            marker=dict(size=tamaños_nodos, color='#2ecc71', line=dict(width=1.5, color='black')),
-                            text=nombres_nodos,
-                            hoverinfo='text'
-                        ))
-                        
-                    fig.update_layout(
-                        geo = dict(
-                            scope = 'south america',
-                            resolution = 50,
-                            showframe = False,
-                            showcoastlines = True,
-                            coastlinecolor = '#1e7e34',  # Costa verde oscura
-                            showland = True,
-                            landcolor = '#000000',      # Superficie terrestre negra
-                            showlakes = True,
-                            showsubunits = True if not geojson_provincias else False, # Solo mostramos límites si no tenemos el GeoJSON para dibujarlos
-                            subunitcolor = '#1e7e34', # Color de contorno provincial nativo para el Plan B
-                            subunitwidth = 3,         # Grosor de la línea del límite interprovincial
-                            bgcolor = '#000000',         # Fondo general del recuadro negro
-                            center = dict(lat=-34.5, lon=-60.5), # Centrado automático en la zona núcleo argentina
-                            projection_scale = 6
-                        ),
-                        margin = dict(l=0, r=0, t=30, b=0),
-                        height = 600
-                    )
+                # --- RENDERIZADO EN STREAMLIT ---
+                st.plotly_chart(fig, use_container_width=True)
 
-                    # --- RENDERIZADO EN STREAMLIT ---
-                    st.plotly_chart(fig, use_container_width=True)
-
-                    st.markdown("##### Detalle de Viajes de la Capa Activa")
-                    if 'Cliente' in df_flujo_mapa.columns:
-                        df_detalle_tramos = df_flujo_mapa[['Origen', 'Destino', 'Cliente', 'TP', 'Kilos']].copy()
-                    else:
-                        df_detalle_tramos = df_flujo_mapa[['Origen', 'Destino', 'TP', 'Kilos']].copy()
-                    st.dataframe(
-                        df_detalle_tramos.sort_values(by='Kilos', ascending=False),
-                        hide_index=True,
-                        use_container_width=True,
-                        height=420,
-                        column_config={
-                            'Kilos': st.column_config.NumberColumn('Kilos', format='%d')
-                        }
-                    )
+                st.markdown("##### Detalle de Viajes de la Capa Activa")
+                if 'Cliente' in df_flujo_mapa.columns:
+                    df_detalle_tramos = df_flujo_mapa[['Origen', 'Destino', 'Cliente', 'TP', 'Kilos']].copy()
+                else:
+                    df_detalle_tramos = df_flujo_mapa[['Origen', 'Destino', 'TP', 'Kilos']].copy()
+                st.dataframe(
+                    df_detalle_tramos.sort_values(by='Kilos', ascending=False),
+                    hide_index=True,
+                    use_container_width=True,
+                    height=420,
+                    column_config={
+                        'Kilos': st.column_config.NumberColumn('Kilos', format='%d')
+                    }
+                )
 
         # ------------------------------------------------------------------
         # PANTALLA 2: EFICIENCIA DE VIAJES (Consolidación)
