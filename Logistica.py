@@ -1219,12 +1219,21 @@ if archivo_cargado is not None:
             Este análisis utiliza K-Means clustering para identificar las ubicaciones óptimas de depósitos 
             regionales en el norte y sur que minimicen distancias y costos logísticos.
             """)
-            
+
+            # Candado de seguridad
+            if not st.session_state['proceso_1_ejecutado']:
+                st.warning("⚠️ No hay datos procesados disponibles.")
+                st.stop()
+
             # Extraer coordenadas de clientes
             coordenadas_clientes = []
             nombres_clientes = []
             kilos_por_cliente = {}
             
+            # 🌟 CAMBIAR ESTA LÍNEA EXACTA:
+            rastro_debug = st.session_state.get('rastro_coordenadas_debug', [])
+            df_debug = pd.DataFrame(rastro_debug) if rastro_debug else pd.DataFrame()
+                        
             for idx, row in df_base[df_base['TP'] == 'CMV'].iterrows():
                 id_cliente = normalizar_texto(str(row['NOMBRE']).strip())
                 if id_cliente in clientes_dict:
