@@ -759,13 +759,10 @@ if archivo_cargado is not None:
                 st.subheader("🗺️ Representación Geográfica de Entregas")
                 
                 # 🎛️ El interruptor para cambiar de dimensión en tiempo real
-                modo_mapa = st.radio("Seleccioná la perspectiva del mapa:", ["Ver1", "Ver2"], horizontal=True)
+                modo_mapa = st.radio("Seleccioná la perspectiva del mapa:", ["Ver1"], horizontal=True)
 
                 if modo_mapa == "Ver1":
                     
-                    st.markdown("##### Resumen de Tramos Geográficos")
-                    
-                else:
                     # ==================================================================
                     # NUEVA LÓGICA: 
                     # ==================================================================
